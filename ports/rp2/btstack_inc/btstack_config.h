@@ -9,6 +9,8 @@
 #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
 #define ENABLE_SOFTWARE_AES128
 #define HAVE_BTSTACK_CRYPTO_PLATFORM_RANDOM
+// Temporary, nonsecret SMP opcode/state tracing for pairing diagnosis.
+#define HAVE_BTSTACK_SM_PLATFORM_TRACE
 #endif
 
 #include "btstack_config_common.h"
