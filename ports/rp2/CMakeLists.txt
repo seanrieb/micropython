@@ -369,6 +369,8 @@ if (MICROPY_BLUETOOTH_BTSTACK)
     # RP2350 hardware TRNG -> mbedTLS CTR_DRBG; avoids CYW43 HCI LE Rand.
     if(PICO_RP2350 AND MICROPY_PY_BLUETOOTH_CYW43)
         list(APPEND MICROPY_SOURCE_PORT btstack_secure_random.c)
+        # Required by the Pico 2 W HID mouse application and the SM backend.
+        target_compile_definitions(${MICROPY_TARGET} PRIVATE MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING=1)
     endif()
 
     include(${MICROPY_DIR}/extmod/btstack/btstack.cmake)
