@@ -1011,7 +1011,10 @@ static uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t a
     // Note this will be a no-op if the ringbuffer implementation is being used, as the Python callback cannot
     // be executed synchronously. This is currently always the case for btstack.
     if ((buffer == NULL) && (buffer_size == 0)) {
-        if (!mp_bluetooth_gatts_on_read_request(connection_handle, att_handle)) {
+        // mp_bluetooth_gatts_on_read_request returns 0 on success.
+        // Treating 0 as false here would suppress every dynamic attribute
+        // length query, producing empty Read By Type GATT responses.
+        if (mp_bluetooth_gatts_on_read_request(connection_handle, att_handle) != 0) {
             DEBUG_printf("att_read_callback: read request denied\n");
             return 0;
         }
