@@ -32,7 +32,7 @@
 	url = https://github.com/micropython/mynewt-nimble.git
 [submodule "lib/btstack"]
 	path = lib/btstack
-	url = https://github.com/bluekitchen/btstack.git
+	url = https://github.com/seanrieb/btstack.git
 [submodule "lib/nxp_driver"]
 	path = lib/nxp_driver
 	url = https://github.com/micropython/nxp_driver.git
