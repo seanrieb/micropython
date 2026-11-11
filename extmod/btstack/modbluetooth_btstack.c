@@ -991,6 +991,36 @@ void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr) {
     gap_le_get_own_address(addr_type, addr);
 }
 
+#if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+void mp_bluetooth_set_static_random_address(const uint8_t *addr) {
+    if (!mp_bluetooth_is_active()) {
+        mp_raise_OSError(ERRNO_BLUETOOTH_NOT_ACTIVE);
+    }
+    // BD_ADDR is canonical display order (most significant octet first).
+    // A static random address requires the two high bits to be 11; the
+    // remaining 46 bits cannot be uniformly all zeros or all ones.
+    if ((addr[0] & 0xc0) != 0xc0) {
+        mp_raise_ValueError(MP_ERROR_TEXT("not a static random BLE address"));
+    }
+    bool any_one = false;
+    bool any_zero = false;
+    for (size_t i = 0; i < 6; ++i) {
+        uint8_t bits = (i == 0) ? (addr[i] & 0x3f) : addr[i];
+        uint8_t mask = (i == 0) ? 0x3f : 0xff;
+        any_one |= bits != 0;
+        any_zero |= bits != mask;
+    }
+    if (!any_one || !any_zero) {
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid static random BLE address"));
+    }
+    bd_addr_t static_addr;
+    memcpy(static_addr, addr, sizeof(static_addr));
+    // Set own address type to Random Static and apply this exact address.
+    // This is the same BTstack API used by set_random_address().
+    gap_random_address_set(static_addr);
+}
+#endif
+
 void mp_bluetooth_set_address_mode(uint8_t addr_mode) {
     if (!mp_bluetooth_is_active()) {
         mp_raise_OSError(ERRNO_BLUETOOTH_NOT_ACTIVE);
