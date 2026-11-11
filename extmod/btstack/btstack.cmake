@@ -12,6 +12,7 @@ target_include_directories(micropy_extmod_btstack INTERFACE
     ${BTSTACK_LIB_DIR}/3rd-party/bluedroid/encoder/include
     ${BTSTACK_LIB_DIR}/3rd-party/md5
     ${BTSTACK_LIB_DIR}/3rd-party/yxml
+    ${BTSTACK_LIB_DIR}/3rd-party/rijndael
 )
 
 target_sources(micropy_extmod_btstack INTERFACE
@@ -38,6 +39,7 @@ target_sources(micropy_extmod_btstack INTERFACE
     ${BTSTACK_LIB_DIR}/src/btstack_audio.c
     ${BTSTACK_LIB_DIR}/src/btstack_base64_decoder.c
     ${BTSTACK_LIB_DIR}/src/btstack_crypto.c
+    ${BTSTACK_LIB_DIR}/3rd-party/rijndael/rijndael.c
     ${BTSTACK_LIB_DIR}/src/btstack_hid_parser.c
     ${BTSTACK_LIB_DIR}/src/btstack_linked_list.c
     ${BTSTACK_LIB_DIR}/src/btstack_memory.c
