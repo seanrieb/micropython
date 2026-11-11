@@ -208,20 +208,20 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     // are logged. These distinguish stale macOS bonds from RNG/SMP failures.
     #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     if (event_type == SM_EVENT_PAIRING_COMPLETE) {
-        printf("BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
+        mp_printf(&mp_plat_print, "BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
             (unsigned)sm_event_pairing_complete_get_handle(packet),
             (unsigned)sm_event_pairing_complete_get_status(packet),
             (unsigned)sm_event_pairing_complete_get_reason(packet));
     } else if (event_type == SM_EVENT_REENCRYPTION_COMPLETE) {
-        printf("BTstack SMP: re-encryption complete handle=%u status=0x%02x\n",
+        mp_printf(&mp_plat_print, "BTstack SMP: re-encryption complete handle=%u status=0x%02x\n",
             (unsigned)sm_event_reencryption_complete_get_handle(packet),
             (unsigned)sm_event_reencryption_complete_get_status(packet));
     } else if (event_type == HCI_EVENT_DISCONNECTION_COMPLETE) {
-        printf("BTstack HCI: disconnect handle=%u reason=0x%02x\n",
+        mp_printf(&mp_plat_print, "BTstack HCI: disconnect handle=%u reason=0x%02x\n",
             (unsigned)hci_event_disconnection_complete_get_connection_handle(packet),
             (unsigned)hci_event_disconnection_complete_get_reason(packet));
     } else if (event_type == HCI_EVENT_ENCRYPTION_CHANGE) {
-        printf("BTstack HCI: encryption handle=%u enabled=%u\n",
+        mp_printf(&mp_plat_print, "BTstack HCI: encryption handle=%u enabled=%u\n",
             (unsigned)hci_event_encryption_change_get_connection_handle(packet),
             (unsigned)hci_event_encryption_change_get_encryption_enabled(packet));
     }
