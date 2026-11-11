@@ -366,6 +366,11 @@ if (MICROPY_BLUETOOTH_BTSTACK)
 
     list(APPEND MICROPY_SOURCE_PORT mpbtstackport.c)
 
+    # RP2350 hardware TRNG -> mbedTLS CTR_DRBG; avoids CYW43 HCI LE Rand.
+    if(PICO_RP2350 AND MICROPY_PY_BLUETOOTH_CYW43)
+        list(APPEND MICROPY_SOURCE_PORT btstack_secure_random.c)
+    endif()
+
     include(${MICROPY_DIR}/extmod/btstack/btstack.cmake)
     target_link_libraries(${MICROPY_TARGET} micropy_extmod_btstack)
 
