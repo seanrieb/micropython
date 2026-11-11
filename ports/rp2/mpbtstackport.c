@@ -44,6 +44,15 @@ void mp_bluetooth_hci_poll_in_ms(uint32_t ms);
 
 static btstack_linked_list_t mp_btstack_runloop_timers;
 
+#if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+// Trace only SMP state and opcode; never emit PDU payloads, nonces, or keys.
+// REQUEST code is the IRK lookup state; TX/RX code is the SMP opcode.
+void btstack_sm_platform_trace(const char *phase, uint16_t handle, uint16_t state, uint8_t code) {
+    mp_printf(&mp_plat_print, "BTstack SMP: %s handle=%u state=%u code=0x%02x\n",
+        phase, (unsigned)handle, (unsigned)state, (unsigned)code);
+}
+#endif
+
 static void mp_btstack_runloop_init(void) {
     mp_btstack_runloop_timers = NULL;
 }
