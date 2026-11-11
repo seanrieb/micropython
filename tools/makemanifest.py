@@ -239,12 +239,12 @@ def main():
     # Python source (for example, when enabling BLE bonding).  Regenerate the
     # frozen C file whenever the preprocessed QSTR header changes, or its
     # QSTR enum may redeclare IDs already defined by the firmware.
-    ts_newest = max(
-        ts_newest,
-        get_timestamp(args.build_dir + "/genhdr/qstrdefs.preprocessed.h", 0),
-        get_timestamp(__file__, 0),
-        get_timestamp(MPY_TOOL, 0),
-    )
+    ts_newest = max(ts_newest, get_timestamp(__file__, 0), get_timestamp(MPY_TOOL, 0))
+    if args.build_dir:
+        ts_newest = max(
+            ts_newest,
+            get_timestamp(args.build_dir + "/genhdr/qstrdefs.preprocessed.h", 0),
+        )
 
     # Check if output file needs generating
     if ts_newest < get_timestamp(args.output, 0):
