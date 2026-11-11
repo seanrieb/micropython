@@ -30,6 +30,10 @@
 #error "BTstack secure random implementation requires an RP2350 TRNG"
 #endif
 
+#ifndef MICROPY_BLUETOOTH_DIAGNOSTICS
+#define MICROPY_BLUETOOTH_DIAGNOSTICS (0)
+#endif
+
 #define RP2350_TRNG_TIMEOUT_US (100000u)
 #define RP2350_TRNG_BLOCK_BYTES (24u)
 #define RP2350_TRNG_ERROR_MASK (0x0eu)
@@ -108,7 +112,9 @@ static int rp2350_btstack_entropy(void *data, unsigned char *output, size_t len)
 // or invoke Python from the entropy callback.
 bool btstack_crypto_platform_random_generate(uint8_t *output, uint16_t len) {
     if (!btstack_drbg_initialized) {
+        #if MICROPY_BLUETOOTH_DIAGNOSTICS
         mp_printf(&mp_plat_print, "BLE RNG: initializing RP2350 TRNG-seeded CTR_DRBG\n");
+        #endif
         static const unsigned char personalization[] = "RP2350 Pico 2 W BTstack SMP";
         mbedtls_ctr_drbg_init(&btstack_drbg);
         int result = mbedtls_ctr_drbg_seed(
@@ -120,7 +126,9 @@ bool btstack_crypto_platform_random_generate(uint8_t *output, uint16_t len) {
             return false;
         }
         btstack_drbg_initialized = true;
+        #if MICROPY_BLUETOOTH_DIAGNOSTICS
         mp_printf(&mp_plat_print, "BLE RNG: CTR_DRBG seeded\n");
+        #endif
     }
     while (len != 0) {
         size_t n = len < MBEDTLS_CTR_DRBG_MAX_REQUEST ?
