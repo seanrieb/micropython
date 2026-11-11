@@ -161,10 +161,16 @@ static void btstack_packet_handler_att_server(uint8_t packet_type, uint16_t chan
     uint8_t event_type = hci_event_packet_get_type(packet);
 
     if (event_type == ATT_EVENT_CONNECTED) {
+        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        mp_printf(&mp_plat_print, "BTstack ATT: connected\n");
+        #endif
         DEBUG_printf("  --> att connected\n");
         // The ATT_EVENT_*CONNECTED events are fired for both peripheral and central role, with no way to tell which.
         // So we use the HCI_EVENT_LE_META event directly in the main packet handler.
     } else if (event_type == ATT_EVENT_DISCONNECTED) {
+        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        mp_printf(&mp_plat_print, "BTstack ATT: disconnected\n");
+        #endif
         DEBUG_printf("  --> att disconnected\n");
     } else if (event_type == ATT_EVENT_HANDLE_VALUE_INDICATION_COMPLETE) {
         DEBUG_printf("  --> att indication complete\n");
@@ -173,6 +179,11 @@ static void btstack_packet_handler_att_server(uint8_t packet_type, uint16_t chan
         uint8_t status = att_event_handle_value_indication_complete_get_status(packet);
         mp_bluetooth_gatts_on_indicate_complete(conn_handle, value_handle, status);
     } else if (event_type == ATT_EVENT_MTU_EXCHANGE_COMPLETE) {
+        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        mp_printf(&mp_plat_print, "BTstack ATT: MTU exchanged handle=%u mtu=%u\n",
+            (unsigned)att_event_mtu_exchange_complete_get_handle(packet),
+            (unsigned)att_event_mtu_exchange_complete_get_MTU(packet));
+        #endif
         DEBUG_printf("  --> att mtu exchange complete\n");
         // This is triggered in peripheral mode, when exchange initiated by us or remote.
         uint16_t conn_handle = att_event_mtu_exchange_complete_get_handle(packet);
@@ -966,6 +977,14 @@ static uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t a
     (void)connection_handle;
     DEBUG_printf("att_read_callback (handle: %u, offset: %u, buffer: %p, size: %u)\n", att_handle, offset, buffer, buffer_size);
     mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db, att_handle);
+    #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+    if (buffer != NULL) {
+        mp_printf(&mp_plat_print, "BTstack ATT: read handle=%u uuid=0x%04x offset=%u available=%u sent_max=%u\n",
+            (unsigned)att_handle, (unsigned)att_uuid_for_handle(att_handle),
+            (unsigned)offset, entry == NULL ? 0u : (unsigned)entry->data_len,
+            (unsigned)buffer_size);
+    }
+    #endif
     if (!entry) {
         DEBUG_printf("att_read_callback handle not found\n");
         return 0;
@@ -990,6 +1009,11 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     (void)transaction_mode;
     DEBUG_printf("att_write_callback (handle: %u, mode: %u, offset: %u, buffer: %p, size: %u)\n", att_handle, transaction_mode, offset, buffer, buffer_size);
     mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db, att_handle);
+    #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+    mp_printf(&mp_plat_print, "BTstack ATT: write handle=%u uuid=0x%04x size=%u mode=%u\n",
+        (unsigned)att_handle, (unsigned)att_uuid_for_handle(att_handle),
+        (unsigned)buffer_size, (unsigned)transaction_mode);
+    #endif
     if (!entry) {
         DEBUG_printf("att_write_callback handle not found\n");
         return 0; // TODO: Find status code for not-found.
