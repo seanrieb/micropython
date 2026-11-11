@@ -11,6 +11,7 @@
 #define HAVE_BTSTACK_CRYPTO_PLATFORM_RANDOM
 // Temporary, nonsecret SMP opcode/state tracing for pairing diagnosis.
 #define HAVE_BTSTACK_SM_PLATFORM_TRACE
+#define HAVE_BTSTACK_ATT_PLATFORM_TRACE
 #endif
 
 #include "btstack_config_common.h"
