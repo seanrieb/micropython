@@ -30,6 +30,9 @@
 
 #define DEBUG_printf(...)
 #define BTSTACK_ENABLE_HCI_DUMP (0)
+#ifndef MICROPY_BLUETOOTH_DIAGNOSTICS
+#define MICROPY_BLUETOOTH_DIAGNOSTICS (0)
+#endif
 
 #if MICROPY_PY_BLUETOOTH && MICROPY_BLUETOOTH_BTSTACK
 
@@ -48,17 +51,23 @@ static btstack_linked_list_t mp_btstack_runloop_timers;
 // Trace only SMP state and opcode; never emit PDU payloads, nonces, or keys.
 // REQUEST code is the IRK lookup state; TX/RX code is the SMP opcode.
 void btstack_sm_platform_trace(const char *phase, uint16_t handle, uint16_t state, uint8_t code) {
+    #if MICROPY_BLUETOOTH_DIAGNOSTICS
     mp_printf(&mp_plat_print, "BTstack SMP: %s handle=%u state=%u code=0x%02x\n",
         phase, (unsigned)handle, (unsigned)state, (unsigned)code);
+    #else
+    (void)phase; (void)handle; (void)state; (void)code;
+    #endif
 }
-// ATT trace logs opcode/length/error, never characteristic contents or keys.
+
 void btstack_att_platform_trace(const char *phase, uint16_t handle,
-    uint8_t opcode, uint16_t length, uint8_t error) {
+    uint8_t opcode, uint16_t len, uint8_t error) {
+    #if MICROPY_BLUETOOTH_DIAGNOSTICS
     mp_printf(&mp_plat_print, "BTstack ATT PDU: %s handle=%u opcode=0x%02x len=%u err=0x%02x\n",
-        phase, (unsigned)handle, (unsigned)opcode, (unsigned)length,
-        (unsigned)error);
+        phase, (unsigned)handle, (unsigned)opcode, (unsigned)len, (unsigned)error);
+    #else
+    (void)phase; (void)handle; (void)opcode; (void)len; (void)error;
+    #endif
 }
-#endif
 
 static void mp_btstack_runloop_init(void) {
     mp_btstack_runloop_timers = NULL;
