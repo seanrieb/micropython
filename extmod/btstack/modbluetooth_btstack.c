@@ -54,6 +54,156 @@ static const uint16_t BTSTACK_GAP_DEVICE_NAME_HANDLE = 3;
 
 volatile int mp_bluetooth_btstack_state = MP_BLUETOOTH_BTSTACK_STATE_OFF;
 
+#if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+// Versioned, fixed-width snapshot of BTstack's current LE device database.
+// The caller persists the opaque blob outside the Bluetooth event callbacks.
+// Format: "BLB1", count, reserved[3], ER[16], IR[16], then count records
+// of type[1], address[6], IRK[16], EDIV[2], RAND[8], LTK[16],
+// key_size[1], authenticated[1], authorized[1], secure_connection[1].
+// Do not modify the on-flash format without bumping the magic.
+#define BT_BOND_HEADER 40u
+#define BT_BOND_RECORD 53u
+static uint8_t bt_local_er[16], bt_local_ir[16];
+static bool bt_local_keys_valid;
+
+extern bool btstack_crypto_platform_random_generate(uint8_t *output, uint16_t len);
+
+static bool bt_ensure_local_keys(void) {
+    if (bt_local_keys_valid) {
+        return true;
+    }
+    uint8_t keys[32];
+    if (!btstack_crypto_platform_random_generate(keys, sizeof(keys))) {
+        return false;
+    }
+    memcpy(bt_local_er, keys, 16);
+    memcpy(bt_local_ir, keys + 16, 16);
+    memset(keys, 0, sizeof(keys));
+    sm_set_er(bt_local_er);
+    sm_set_ir(bt_local_ir);
+    bt_local_keys_valid = true;
+    return true;
+}
+
+size_t mp_btstack_bond_export(uint8_t *buf, size_t capacity) {
+    if (!mp_bluetooth_is_active() || !bt_ensure_local_keys()) {
+        return 0;
+    }
+    int count = le_device_db_count();
+    if (count < 0 || count > 255) {
+        return 0;
+    }
+    size_t needed = BT_BOND_HEADER + (size_t)count * BT_BOND_RECORD;
+    if (buf == NULL) {
+        return needed;
+    }
+    if (capacity < needed) {
+        return 0;
+    }
+    memset(buf, 0, needed);
+    memcpy(buf, "BLB1", 4);
+    buf[4] = (uint8_t)count;
+    memcpy(buf + 8, bt_local_er, 16);
+    memcpy(buf + 24, bt_local_ir, 16);
+    size_t offset = BT_BOND_HEADER;
+    for (int i = 0; i < le_device_db_max_count(); ++i) {
+        int type = BD_ADDR_TYPE_UNKNOWN;
+        bd_addr_t addr;
+        sm_key_t irk;
+        le_device_db_info(i, &type, addr, irk);
+        if (type == BD_ADDR_TYPE_UNKNOWN) {
+            continue;
+        }
+        uint16_t ediv = 0;
+        uint8_t rand[8] = {0};
+        sm_key_t ltk = {0};
+        int key_size = 0, authenticated = 0, authorized = 0, secure = 0;
+        le_device_db_encryption_get(i, &ediv, rand, ltk, &key_size,
+            &authenticated, &authorized, &secure);
+        buf[offset++] = (uint8_t)type;
+        memcpy(buf + offset, addr, 6); offset += 6;
+        memcpy(buf + offset, irk, 16); offset += 16;
+        buf[offset++] = (uint8_t)ediv;
+        buf[offset++] = (uint8_t)(ediv >> 8);
+        memcpy(buf + offset, rand, 8); offset += 8;
+        memcpy(buf + offset, ltk, 16); offset += 16;
+        buf[offset++] = (uint8_t)key_size;
+        buf[offset++] = (uint8_t)authenticated;
+        buf[offset++] = (uint8_t)authorized;
+        buf[offset++] = (uint8_t)secure;
+    }
+    return offset == needed ? needed : 0;
+}
+
+bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
+    if (!mp_bluetooth_is_active() || data == NULL ||
+        length < BT_BOND_HEADER || memcmp(data, "BLB1", 4) != 0) {
+        return false;
+    }
+    uint8_t count = data[4];
+    if (data[5] || data[6] || data[7] ||
+        count > le_device_db_max_count() ||
+        length != BT_BOND_HEADER + (size_t)count * BT_BOND_RECORD) {
+        return false;
+    }
+    // Validate before touching existing keys.
+    for (unsigned i = 0; i < count; ++i) {
+        const uint8_t *rec = data + BT_BOND_HEADER + i * BT_BOND_RECORD;
+        if (rec[0] > 1 || rec[49] < 7 || rec[49] > 16 ||
+            rec[50] > 1 || rec[51] > 1 || rec[52] > 1) {
+            return false;
+        }
+    }
+    for (int i = 0; i < le_device_db_max_count(); ++i) {
+        le_device_db_remove(i);
+    }
+    memcpy(bt_local_er, data + 8, 16);
+    memcpy(bt_local_ir, data + 24, 16);
+    sm_set_er(bt_local_er);
+    sm_set_ir(bt_local_ir);
+    bt_local_keys_valid = true;
+    for (unsigned i = 0; i < count; ++i) {
+        const uint8_t *rec = data + BT_BOND_HEADER + i * BT_BOND_RECORD;
+        bd_addr_t addr;
+        sm_key_t irk, ltk;
+        uint8_t rand[8];
+        memcpy(addr, rec + 1, 6);
+        memcpy(irk, rec + 7, 16);
+        memcpy(rand, rec + 25, 8);
+        memcpy(ltk, rec + 33, 16);
+        int index = le_device_db_add(rec[0], addr, irk);
+        if (index < 0) {
+            return false;
+        }
+        uint16_t ediv = rec[23] | ((uint16_t)rec[24] << 8);
+        le_device_db_encryption_set(index, ediv, rand, ltk,
+            rec[49], rec[50], rec[51], rec[52]);
+    }
+    return true;
+}
+
+bool mp_btstack_bond_clear(void) {
+    if (!mp_bluetooth_is_active()) {
+        return false;
+    }
+    uint8_t keys[32];
+    if (!btstack_crypto_platform_random_generate(keys, sizeof(keys))) {
+        return false;
+    }
+    for (int i = 0; i < le_device_db_max_count(); ++i) {
+        le_device_db_remove(i);
+    }
+    memcpy(bt_local_er, keys, 16);
+    memcpy(bt_local_ir, keys + 16, 16);
+    memset(keys, 0, sizeof(keys));
+    sm_set_er(bt_local_er);
+    sm_set_ir(bt_local_ir);
+    bt_local_keys_valid = true;
+    return true;
+}
+#endif
+
+
 // sm_set_authentication_requirements is set-only, so cache current value.
 #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 static uint8_t mp_bluetooth_btstack_sm_auth_req = 0;
@@ -686,6 +836,10 @@ int mp_bluetooth_init(void) {
     l2cap_init();
     le_device_db_init();
     sm_init();
+
+    #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    bt_local_keys_valid = false;
+    #endif
 
     // Set blank ER/IR keys to suppress BTstack warning.
     // TODO handle this correctly.
