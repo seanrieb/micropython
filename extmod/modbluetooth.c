@@ -927,6 +927,45 @@ static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(bluetooth_ble_hci_cmd_obj, 5, 5, blue
 
 #endif // MICROPY_PY_BLUETOOTH_ENABLE_HCI_CMD
 
+
+#if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+// RP2350 BTstack bond snapshots are loaded before advertising and written
+// from the Python application loop. This API never touches the filesystem.
+extern size_t mp_btstack_bond_export(uint8_t *buf, size_t capacity);
+extern bool mp_btstack_bond_import(const uint8_t *buf, size_t len);
+extern bool mp_btstack_bond_clear(void);
+
+static mp_obj_t bluetooth_ble_bond_db(size_t n_args, const mp_obj_t *args) {
+    if (n_args == 1) {
+        size_t size = mp_btstack_bond_export(NULL, 0);
+        if (size == 0) {
+            mp_raise_OSError(MP_EIO);
+        }
+        uint8_t *buf = m_new(uint8_t, size);
+        if (mp_btstack_bond_export(buf, size) != size) {
+            m_del(uint8_t, buf, size);
+            mp_raise_OSError(MP_EIO);
+        }
+        mp_obj_t result = mp_obj_new_bytes(buf, size);
+        m_del(uint8_t, buf, size);
+        return result;
+    }
+    if (args[1] == mp_const_none) {
+        if (!mp_btstack_bond_clear()) {
+            mp_raise_OSError(MP_EIO);
+        }
+    } else {
+        mp_buffer_info_t view;
+        mp_get_buffer_raise(args[1], &view, MP_BUFFER_READ);
+        if (!mp_btstack_bond_import(view.buf, view.len)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("invalid BLE bond snapshot"));
+        }
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(bluetooth_ble_bond_db_obj, 1, 2, bluetooth_ble_bond_db);
+#endif
+
 // ----------------------------------------------------------------------------
 // Bluetooth object: Definition
 // ----------------------------------------------------------------------------
@@ -935,6 +974,9 @@ static const mp_rom_map_elem_t bluetooth_ble_locals_dict_table[] = {
     // General
     { MP_ROM_QSTR(MP_QSTR_active), MP_ROM_PTR(&bluetooth_ble_active_obj) },
     { MP_ROM_QSTR(MP_QSTR_config), MP_ROM_PTR(&bluetooth_ble_config_obj) },
+    #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    { MP_ROM_QSTR(MP_QSTR_bond_db), MP_ROM_PTR(&bluetooth_ble_bond_db_obj) },
+    #endif
     { MP_ROM_QSTR(MP_QSTR_irq), MP_ROM_PTR(&bluetooth_ble_irq_obj) },
     // GAP
     { MP_ROM_QSTR(MP_QSTR_gap_advertise), MP_ROM_PTR(&bluetooth_ble_gap_advertise_obj) },
