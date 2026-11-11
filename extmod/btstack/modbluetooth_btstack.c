@@ -503,6 +503,10 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     } else if (event_type == HCI_EVENT_DISCONNECTION_COMPLETE) {
         DEBUG_printf("  --> hci disconnect complete\n");
         uint16_t conn_handle = hci_event_disconnection_complete_get_connection_handle(packet);
+        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        mp_bluetooth_on_disconnect_reason(conn_handle,
+            hci_event_disconnection_complete_get_reason(packet));
+        #endif
         const hci_connection_t *conn = hci_connection_for_handle(conn_handle);
         uint16_t irq_event;
         if (conn == NULL || conn->role == 0) {
@@ -841,8 +845,8 @@ int mp_bluetooth_init(void) {
     bt_local_keys_valid = false;
     #endif
 
-    // Set blank ER/IR keys to suppress BTstack warning.
-    // TODO handle this correctly.
+    // BLE.bond_db() will replace these bootstrap values with stable,
+    // hardware-random ER/IR keys before advertising starts.
     sm_key_t dummy_key;
     memset(dummy_key, 0, sizeof(dummy_key));
     sm_set_er(dummy_key);
