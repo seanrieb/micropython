@@ -51,6 +51,13 @@ void btstack_sm_platform_trace(const char *phase, uint16_t handle, uint16_t stat
     mp_printf(&mp_plat_print, "BTstack SMP: %s handle=%u state=%u code=0x%02x\n",
         phase, (unsigned)handle, (unsigned)state, (unsigned)code);
 }
+// ATT trace logs opcode/length/error, never characteristic contents or keys.
+void btstack_att_platform_trace(const char *phase, uint16_t handle,
+    uint8_t opcode, uint16_t length, uint8_t error) {
+    mp_printf(&mp_plat_print, "BTstack ATT PDU: %s handle=%u opcode=0x%02x len=%u err=0x%02x\n",
+        phase, (unsigned)handle, (unsigned)opcode, (unsigned)length,
+        (unsigned)error);
+}
 #endif
 
 static void mp_btstack_runloop_init(void) {
