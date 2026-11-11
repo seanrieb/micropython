@@ -396,6 +396,19 @@ static mp_obj_t bluetooth_ble_config(size_t n_args, const mp_obj_t *args, mp_map
                         mp_bluetooth_set_address_mode(addr_mode);
                         break;
                     }
+                    #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+                    case MP_QSTR_static_random_address: {
+                        // Canonical network byte order, as in config('mac').
+                        // Caller must set this before advertising/connecting.
+                        mp_buffer_info_t addr;
+                        mp_get_buffer_raise(e->value, &addr, MP_BUFFER_READ);
+                        if (addr.len != 6) {
+                            mp_raise_ValueError(MP_ERROR_TEXT("static random address must be 6 bytes"));
+                        }
+                        mp_bluetooth_set_static_random_address(addr.buf);
+                        break;
+                    }
+                    #endif
                     #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
                     case MP_QSTR_bond: {
                         bool bonding_enabled = mp_obj_is_true(e->value);
