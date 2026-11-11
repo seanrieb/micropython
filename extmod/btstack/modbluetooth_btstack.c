@@ -965,7 +965,24 @@ int mp_bluetooth_gatts_register_service_begin(bool append) {
         assert(handle == BTSTACK_GAP_DEVICE_NAME_HANDLE);
 
         att_db_util_add_service_uuid16(0x1801);
-        att_db_util_add_characteristic_uuid16(0x2a05, ATT_PROPERTY_READ, ATT_SECURITY_NONE, ATT_SECURITY_NONE, NULL, 0);
+        // Service Changed (0x2a05) is an INDICATE-only control-point
+        // characteristic. Advertising it as READ without indications is not
+        // GATT compliant and can prevent HID-over-GATT host initialization.
+        // BTstack creates the CCCD immediately after the value handle.
+        uint16_t service_changed_handle = att_db_util_add_characteristic_uuid16(
+            0x2a05, ATT_PROPERTY_INDICATE, ATT_SECURITY_NONE, ATT_SECURITY_NONE, NULL, 0);
+        uint16_t service_changed_cccd = service_changed_handle + 1;
+        uint8_t service_changed_cccd_disabled[2] = {0, 0};
+        mp_bluetooth_gatts_db_create_entry(
+            MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db,
+            service_changed_cccd, MP_BLUETOOTH_CCCD_LEN);
+        int cccd_err = mp_bluetooth_gatts_db_write(
+            MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db,
+            service_changed_cccd, service_changed_cccd_disabled,
+            sizeof(service_changed_cccd_disabled));
+        if (cccd_err) {
+            return cccd_err;
+        }
     }
 
     return 0;
