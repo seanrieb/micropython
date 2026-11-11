@@ -310,6 +310,12 @@ void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr);
 // Sets the addressing mode to use.
 void mp_bluetooth_set_address_mode(uint8_t addr_mode);
 
+#if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+// Set an explicit BLE static random address in canonical network order.
+// Do so before advertising; the address is not persistent in the controller.
+void mp_bluetooth_set_static_random_address(const uint8_t *addr);
+#endif
+
 #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
 // Set bonding flag in pairing requests (i.e. persist security keys).
 void mp_bluetooth_set_bonding(bool enabled);
