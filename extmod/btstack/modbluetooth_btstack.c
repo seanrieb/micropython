@@ -414,6 +414,15 @@ static btstack_packet_callback_registration_t hci_event_callback_registration = 
     .callback = &btstack_packet_handler_generic
 };
 
+// BTstack Security Manager events use a separate dispatch list from HCI
+// events. These events must be explicitly registered to complete Just Works
+// pairing and report SMP pairing outcomes.
+#if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+static btstack_packet_callback_registration_t sm_event_callback_registration = {
+    .callback = &btstack_packet_handler_generic
+};
+#endif
+
 #if MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT
 // For when the handler is being used for service discovery.
 static void btstack_packet_handler_discover_services(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size) {
@@ -623,6 +632,9 @@ static void deinit_stack(void) {
     mp_bluetooth_btstack_state = MP_BLUETOOTH_BTSTACK_STATE_OFF;
 
     // Deinitialise BTstack components.
+    #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+    sm_remove_event_handler(&sm_event_callback_registration);
+    #endif
     sm_deinit();
     l2cap_deinit();
     hci_deinit();
@@ -680,6 +692,12 @@ int mp_bluetooth_init(void) {
 
     // Register for HCI events.
     hci_add_event_handler(&hci_event_callback_registration);
+
+    // SMP events are not HCI events; the Security Manager has its own
+    // listener list, including for SM_EVENT_JUST_WORKS_REQUEST.
+    #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+    sm_add_event_handler(&sm_event_callback_registration);
+    #endif
 
     // Register for ATT server events.
     att_server_register_packet_handler(&btstack_packet_handler_att_server);
