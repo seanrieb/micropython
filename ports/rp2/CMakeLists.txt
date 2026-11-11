@@ -659,6 +659,17 @@ set_source_files_properties(
     COMPILE_OPTIONS "-Wno-error=array-bounds;-Wno-error=unused-but-set-variable"
 )
 
+# Recent GCC versions flag false-positive array bounds in mbedTLS's
+# mbedtls_xor_no_simd() when inlined into the AES-CBC and GCM code paths.
+# Keep -Werror enabled for the rest of the firmware; only downgrade this
+# specific diagnostic for these two third-party translation units.
+set_source_files_properties(
+    ${MICROPY_DIR}/lib/mbedtls/library/aes.c
+    ${MICROPY_DIR}/lib/mbedtls/library/gcm.c
+    PROPERTIES
+    COMPILE_OPTIONS "-Wno-error=array-bounds"
+)
+
 target_compile_definitions(${MICROPY_TARGET} PRIVATE
     ${MICROPY_DEF_BOARD}
     "FFCONF_H=\"${MICROPY_OOFATFS_DIR}/ffconf.h\""
