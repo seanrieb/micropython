@@ -296,6 +296,20 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
         DEBUG_printf("  --> btstack # conns changed\n");
     } else if (event_type == HCI_EVENT_VENDOR_SPECIFIC) {
         DEBUG_printf("  --> hci vendor specific\n");
+    } else if (event_type == SM_EVENT_JUST_WORKS_REQUEST) {
+        // BTstack's Just Works confirmation event is not exposed to Python.
+        // A no-MITM peripheral cannot complete pairing until it is acknowledged.
+        // Never silently approve Just Works when MITM protection was requested.
+        #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        uint16_t conn_handle = sm_event_just_works_request_get_handle(packet);
+        if ((mp_bluetooth_btstack_sm_auth_req & SM_AUTHREQ_MITM_PROTECTION) == 0) {
+            mp_printf(&mp_plat_print, "BTstack SMP: accepting Just Works handle=%u\n", (unsigned)conn_handle);
+            sm_just_works_confirm(conn_handle);
+        } else {
+            mp_printf(&mp_plat_print, "BTstack SMP: rejecting Just Works (MITM requested) handle=%u\n", (unsigned)conn_handle);
+            sm_bonding_decline(conn_handle);
+        }
+        #endif
     } else if (event_type == SM_EVENT_AUTHORIZATION_RESULT ||
                event_type == SM_EVENT_PAIRING_COMPLETE ||
                // event_type == GAP_EVENT_DEDICATED_BONDING_COMPLETED || // No conn_handle
