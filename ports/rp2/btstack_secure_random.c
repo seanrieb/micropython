@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "hardware/structs/trng.h"
@@ -73,9 +74,14 @@ static bool rp2350_read_healthy_entropy(uint8_t output[RP2350_TRNG_BLOCK_BYTES])
         valid = nonzero != 0;
     }
 
+    const uint32_t trng_status = trng_hw->rng_isr;
+    const uint32_t trng_ready = trng_hw->trng_valid;
     trng_hw->rnd_source_enable = 0;
     spin_unlock(lock, irq_state);
     if (!valid) {
+        // Diagnostic metadata only; entropy and keys are never printed.
+        printf("BLE RNG: TRNG sample failed ISR=0x%02x valid=%u\n",
+            (unsigned)trng_status, (unsigned)trng_ready);
         memset(output, 0, RP2350_TRNG_BLOCK_BYTES);
     }
     return valid;
@@ -101,21 +107,26 @@ static int rp2350_btstack_entropy(void *data, unsigned char *output, size_t len)
 // or invoke Python from the entropy callback.
 bool btstack_crypto_platform_random_generate(uint8_t *output, uint16_t len) {
     if (!btstack_drbg_initialized) {
+        printf("BLE RNG: initializing RP2350 TRNG-seeded CTR_DRBG\n");
         static const unsigned char personalization[] = "RP2350 Pico 2 W BTstack SMP";
         mbedtls_ctr_drbg_init(&btstack_drbg);
         int result = mbedtls_ctr_drbg_seed(
             &btstack_drbg, rp2350_btstack_entropy, NULL,
             personalization, sizeof(personalization) - 1);
         if (result != 0) {
+            printf("BLE RNG: CTR_DRBG seed failure, error=%d\n", result);
             mbedtls_ctr_drbg_free(&btstack_drbg);
             return false;
         }
         btstack_drbg_initialized = true;
+        printf("BLE RNG: CTR_DRBG seeded\n");
     }
     while (len != 0) {
         size_t n = len < MBEDTLS_CTR_DRBG_MAX_REQUEST ?
             len : MBEDTLS_CTR_DRBG_MAX_REQUEST;
-        if (mbedtls_ctr_drbg_random(&btstack_drbg, output, n) != 0) {
+        int result = mbedtls_ctr_drbg_random(&btstack_drbg, output, n);
+        if (result != 0) {
+            printf("BLE RNG: CTR_DRBG generation failure, error=%d\n", result);
             return false;
         }
         output += n;
