@@ -233,6 +233,19 @@ def main():
             ts_outfile = result.timestamp
         ts_newest = max(ts_newest, ts_outfile)
 
+    # Frozen .mpy QSTR IDs are generated relative to the firmware's QSTR
+    # header.  A change in compiler configuration can move a string from
+    # the frozen-only pool into the firmware pool without changing any frozen
+    # Python source (for example, when enabling BLE bonding).  Regenerate the
+    # frozen C file whenever the preprocessed QSTR header changes, or its
+    # QSTR enum may redeclare IDs already defined by the firmware.
+    ts_newest = max(
+        ts_newest,
+        get_timestamp(args.build_dir + "/genhdr/qstrdefs.preprocessed.h", 0),
+        get_timestamp(__file__, 0),
+        get_timestamp(MPY_TOOL, 0),
+    )
+
     # Check if output file needs generating
     if ts_newest < get_timestamp(args.output, 0):
         # No files are newer than output file so it does not need updating
