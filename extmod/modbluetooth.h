@@ -161,6 +161,7 @@
 #define MP_BLUETOOTH_IRQ_GET_SECRET                     (29)
 #define MP_BLUETOOTH_IRQ_SET_SECRET                     (30)
 #define MP_BLUETOOTH_IRQ_PASSKEY_ACTION                 (31)
+#define MP_BLUETOOTH_IRQ_DISCONNECT_REASON              (32)
 
 #define MP_BLUETOOTH_ADDRESS_MODE_PUBLIC (0)
 #define MP_BLUETOOTH_ADDRESS_MODE_RANDOM (1)
