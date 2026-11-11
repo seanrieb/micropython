@@ -68,6 +68,7 @@ void btstack_att_platform_trace(const char *phase, uint16_t handle,
     (void)phase; (void)handle; (void)opcode; (void)len; (void)error;
     #endif
 }
+#endif // PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
 
 static void mp_btstack_runloop_init(void) {
     mp_btstack_runloop_timers = NULL;
