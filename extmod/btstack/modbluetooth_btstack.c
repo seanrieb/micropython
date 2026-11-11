@@ -38,6 +38,17 @@
 
 #define DEBUG_printf(...) // printf("btstack: " __VA_ARGS__)
 
+// Optional protocol diagnostics for development builds. Disabled by default.
+// Define MICROPY_BLUETOOTH_DIAGNOSTICS=1 in compiler flags to enable.
+#ifndef MICROPY_BLUETOOTH_DIAGNOSTICS
+#define MICROPY_BLUETOOTH_DIAGNOSTICS (0)
+#endif
+#if MICROPY_BLUETOOTH_DIAGNOSTICS
+#define BT_DIAG(...) mp_printf(&mp_plat_print, __VA_ARGS__)
+#else
+#define BT_DIAG(...) ((void)0)
+#endif
+
 #ifndef MICROPY_PY_BLUETOOTH_DEFAULT_GAP_NAME
 #define MICROPY_PY_BLUETOOTH_DEFAULT_GAP_NAME "MPY BTSTACK"
 #endif
@@ -312,14 +323,14 @@ static void btstack_packet_handler_att_server(uint8_t packet_type, uint16_t chan
 
     if (event_type == ATT_EVENT_CONNECTED) {
         #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
-        mp_printf(&mp_plat_print, "BTstack ATT: connected\n");
+        BT_DIAG( "BTstack ATT: connected\n");
         #endif
         DEBUG_printf("  --> att connected\n");
         // The ATT_EVENT_*CONNECTED events are fired for both peripheral and central role, with no way to tell which.
         // So we use the HCI_EVENT_LE_META event directly in the main packet handler.
     } else if (event_type == ATT_EVENT_DISCONNECTED) {
         #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
-        mp_printf(&mp_plat_print, "BTstack ATT: disconnected\n");
+        BT_DIAG( "BTstack ATT: disconnected\n");
         #endif
         DEBUG_printf("  --> att disconnected\n");
     } else if (event_type == ATT_EVENT_HANDLE_VALUE_INDICATION_COMPLETE) {
@@ -330,7 +341,7 @@ static void btstack_packet_handler_att_server(uint8_t packet_type, uint16_t chan
         mp_bluetooth_gatts_on_indicate_complete(conn_handle, value_handle, status);
     } else if (event_type == ATT_EVENT_MTU_EXCHANGE_COMPLETE) {
         #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
-        mp_printf(&mp_plat_print, "BTstack ATT: MTU exchanged handle=%u mtu=%u\n",
+        BT_DIAG( "BTstack ATT: MTU exchanged handle=%u mtu=%u\n",
             (unsigned)att_event_mtu_exchange_complete_get_handle(packet),
             (unsigned)att_event_mtu_exchange_complete_get_MTU(packet));
         #endif
@@ -369,20 +380,20 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     // are logged. These distinguish stale macOS bonds from RNG/SMP failures.
     #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     if (event_type == SM_EVENT_PAIRING_COMPLETE) {
-        mp_printf(&mp_plat_print, "BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
+        BT_DIAG( "BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
             (unsigned)sm_event_pairing_complete_get_handle(packet),
             (unsigned)sm_event_pairing_complete_get_status(packet),
             (unsigned)sm_event_pairing_complete_get_reason(packet));
     } else if (event_type == SM_EVENT_REENCRYPTION_COMPLETE) {
-        mp_printf(&mp_plat_print, "BTstack SMP: re-encryption complete handle=%u status=0x%02x\n",
+        BT_DIAG( "BTstack SMP: re-encryption complete handle=%u status=0x%02x\n",
             (unsigned)sm_event_reencryption_complete_get_handle(packet),
             (unsigned)sm_event_reencryption_complete_get_status(packet));
     } else if (event_type == HCI_EVENT_DISCONNECTION_COMPLETE) {
-        mp_printf(&mp_plat_print, "BTstack HCI: disconnect handle=%u reason=0x%02x\n",
+        BT_DIAG( "BTstack HCI: disconnect handle=%u reason=0x%02x\n",
             (unsigned)hci_event_disconnection_complete_get_connection_handle(packet),
             (unsigned)hci_event_disconnection_complete_get_reason(packet));
     } else if (event_type == HCI_EVENT_ENCRYPTION_CHANGE) {
-        mp_printf(&mp_plat_print, "BTstack HCI: encryption handle=%u enabled=%u\n",
+        BT_DIAG( "BTstack HCI: encryption handle=%u enabled=%u\n",
             (unsigned)hci_event_encryption_change_get_connection_handle(packet),
             (unsigned)hci_event_encryption_change_get_encryption_enabled(packet));
     }
@@ -464,10 +475,10 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
         #if MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
         uint16_t conn_handle = sm_event_just_works_request_get_handle(packet);
         if ((mp_bluetooth_btstack_sm_auth_req & SM_AUTHREQ_MITM_PROTECTION) == 0) {
-            mp_printf(&mp_plat_print, "BTstack SMP: accepting Just Works handle=%u\n", (unsigned)conn_handle);
+            BT_DIAG( "BTstack SMP: accepting Just Works handle=%u\n", (unsigned)conn_handle);
             sm_just_works_confirm(conn_handle);
         } else {
-            mp_printf(&mp_plat_print, "BTstack SMP: rejecting Just Works (MITM requested) handle=%u\n", (unsigned)conn_handle);
+            BT_DIAG( "BTstack SMP: rejecting Just Works (MITM requested) handle=%u\n", (unsigned)conn_handle);
             sm_bonding_decline(conn_handle);
         }
         #endif
@@ -1154,7 +1165,7 @@ static uint16_t att_read_callback(hci_con_handle_t connection_handle, uint16_t a
     mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db, att_handle);
     #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
     if (buffer != NULL) {
-        mp_printf(&mp_plat_print, "BTstack ATT: read handle=%u uuid=0x%04x offset=%u available=%u sent_max=%u\n",
+        BT_DIAG( "BTstack ATT: read handle=%u uuid=0x%04x offset=%u available=%u sent_max=%u\n",
             (unsigned)att_handle, (unsigned)att_uuid_for_handle(att_handle),
             (unsigned)offset, entry == NULL ? 0u : (unsigned)entry->data_len,
             (unsigned)buffer_size);
@@ -1188,7 +1199,7 @@ static int att_write_callback(hci_con_handle_t connection_handle, uint16_t att_h
     DEBUG_printf("att_write_callback (handle: %u, mode: %u, offset: %u, buffer: %p, size: %u)\n", att_handle, transaction_mode, offset, buffer, buffer_size);
     mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_btstack_root_pointers)->gatts_db, att_handle);
     #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
-    mp_printf(&mp_plat_print, "BTstack ATT: write handle=%u uuid=0x%04x size=%u mode=%u\n",
+    BT_DIAG( "BTstack ATT: write handle=%u uuid=0x%04x size=%u mode=%u\n",
         (unsigned)att_handle, (unsigned)att_uuid_for_handle(att_handle),
         (unsigned)buffer_size, (unsigned)transaction_mode);
     #endif
