@@ -1413,6 +1413,14 @@ mp_int_t mp_bluetooth_gatts_on_read_request(uint16_t conn_handle, uint16_t value
     return ret;
 }
 
+// Port-specific diagnostic event, emitted before the normal disconnect
+// callback so applications can distinguish host termination from link loss.
+void mp_bluetooth_on_disconnect_reason(uint16_t conn_handle, uint8_t reason) {
+    mp_int_t args[] = {conn_handle, reason};
+    invoke_irq_handler(MP_BLUETOOTH_IRQ_DISCONNECT_REASON, args, 2, 0,
+        NULL_ADDR, NULL_UUID, NULL_DATA, NULL_DATA_LEN, 0);
+}
+
 void mp_bluetooth_gatts_on_mtu_exchanged(uint16_t conn_handle, uint16_t value) {
     mp_int_t args[] = {conn_handle, value};
     invoke_irq_handler(MP_BLUETOOTH_IRQ_MTU_EXCHANGED, args, 2, 0, NULL_ADDR, NULL_UUID, NULL_DATA, NULL_DATA_LEN, 0);
