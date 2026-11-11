@@ -342,7 +342,18 @@ if (MICROPY_PY_LWIP)
     target_include_directories(${MICROPY_TARGET} PRIVATE
         lwip_inc
     )
-    target_compile_definitions(${MICROPY_TARGET} PRIVATE
+    # Recent GCC versions flag false-positive array bounds in mbedTLS's
+# mbedtls_xor_no_simd() when inlined into the AES-CBC and GCM code paths.
+# Keep -Werror enabled for the rest of the firmware; only downgrade this
+# specific diagnostic for these two third-party translation units.
+set_source_files_properties(
+    ${MICROPY_DIR}/lib/mbedtls/library/aes.c
+    ${MICROPY_DIR}/lib/mbedtls/library/gcm.c
+    PROPERTIES
+    COMPILE_OPTIONS "-Wno-error=array-bounds"
+)
+
+target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_LWIP=1
     )
 endif()
