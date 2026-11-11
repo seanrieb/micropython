@@ -503,7 +503,7 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     } else if (event_type == HCI_EVENT_DISCONNECTION_COMPLETE) {
         DEBUG_printf("  --> hci disconnect complete\n");
         uint16_t conn_handle = hci_event_disconnection_complete_get_connection_handle(packet);
-        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+        #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
         mp_bluetooth_on_disconnect_reason(conn_handle,
             hci_event_disconnection_complete_get_reason(packet));
         #endif
