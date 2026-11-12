@@ -76,3 +76,75 @@ diff --git a/test/security_manager/security_manager.cpp b/test/security_manager/
 +}
  int main (int argc, const char * argv[]){
      // log into file using HCI_DUMP_PACKETLOGGER format
+diff --git a/test/security_manager/btstack_config.h b/test/security_manager/btstack_config.h
+--- a/test/security_manager/btstack_config.h
++++ b/test/security_manager/btstack_config.h
+@@ -17,14 +17,20 @@
+ #define ENABLE_LOG_INFO
+ #define ENABLE_PRINTF_HEXDUMP
+ 
+-#define ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS
+-#define ENABLE_L2CAP_ENHANCED_RETRANSMISSION_MODE
+-#define ENABLE_LE_CENTRAL
+-#define ENABLE_LE_PERIPHERAL
+-#define ENABLE_LE_SECURE_CONNECTIONS
+-#define ENABLE_LE_SIGNED_WRITE
+-#define ENABLE_SDP_EXTRA_QUERIES
+-#define ENABLE_SOFTWARE_AES128
++#ifndef BTSTACK_DKG_TEST_HCI_AES
++#define ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS
++#endif
++#define ENABLE_L2CAP_ENHANCED_RETRANSMISSION_MODE
++#define ENABLE_LE_CENTRAL
++#define ENABLE_LE_PERIPHERAL
++#ifndef BTSTACK_DKG_TEST_HCI_AES
++#define ENABLE_LE_SECURE_CONNECTIONS
++#endif
++#define ENABLE_LE_SIGNED_WRITE
++#define ENABLE_SDP_EXTRA_QUERIES
++#ifndef BTSTACK_DKG_TEST_HCI_AES
++#define ENABLE_SOFTWARE_AES128
++#endif
+ 
+ // BTstack configuration. buffers, sizes, ...
+ #define HCI_ACL_PAYLOAD_SIZE 69
+diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
+--- a/test/security_manager/Makefile
++++ b/test/security_manager/Makefile
+@@ -43,7 +43,23 @@
+ LDFLAGS_ASAN     = ${LDFLAGS} -fsanitize=address
+ 
+ COMMON_OBJ_COVERAGE = $(addprefix build-coverage/,$(COMMON:.c=.o)) build-coverage/uECC.o
+-COMMON_OBJ_ASAN     = $(addprefix build-asan/,    $(COMMON:.c=.o)) build-asan/uECC.o
++COMMON_OBJ_ASAN     = $(addprefix build-asan/,    $(COMMON:.c=.o)) build-asan/uECC.o
++COMMON_OBJ_DKG      = $(addprefix build-dkg/,     $(COMMON:.c=.o))
++CFLAGS_DKG          = ${CFLAGS} -DBTSTACK_DKG_TEST_HCI_AES
++
++# Dedicated controller-AES build for the deterministic DKG race regression.
++# Keep the existing CppUTest targets and their software-AES configuration.
++dkg-race: build-dkg/security_manager
++	build-dkg/security_manager -n DkgRekeyDuringAsyncAES
++
++build-dkg/%.o: %.c | build-dkg
++	${CC} -c $(CFLAGS_DKG) $< -o $@
++
++build-dkg/%.o: %.cpp | build-dkg
++	${CXX} -c $(CFLAGS_DKG) $< -o $@
++
++build-dkg/security_manager: $(COMMON_OBJ_DKG) build-dkg/security_manager.o | build-dkg
++	${CXX} $^ $(LDFLAGS) -o $@
+ 
+ all: build-coverage/security_manager build-asan/security_manager
+ 
+diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
+--- a/test/security_manager/Makefile
++++ b/test/security_manager/Makefile
+@@ -77,6 +77,6 @@
+ 	rm -f build-coverage/*.gcda
+ 	build-coverage/security_manager
+ 
+-clean:
+-	rm -rf build-coverage build-asan
++clean:
++	rm -rf build-coverage build-asan build-dkg
+ 
