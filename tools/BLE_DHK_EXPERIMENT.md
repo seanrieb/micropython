@@ -248,14 +248,25 @@ no new pairing in progress. From the Mac repository root:
 mpremote cp tools/ble_bond_prevalidation_test.py :
 ```
 
-At the Pico REPL **after** `import main; main.start()` has restored the
-bond and established a stable connection (or after a clean disconnect):
+Call the test **inside the active controller service**, from its normal
+application loop after the bond has been restored and before the service
+stops Bluetooth. Do not call from the REPL after `main.start()` returns
+and prints `Controller service stopped`: Bluetooth may already be inactive,
+causing `BLE.bond_db()` to raise `OSError: EIO`.
+
+Temporarily insert the following in the application code immediately after
+the existing successful bond restore, using the application's existing BLE
+instance (the restore must not be inside a Bluetooth IRQ callback):
 
 ```python
-import bluetooth
 import ble_bond_prevalidation_test
-ble_bond_prevalidation_test.run(bluetooth.BLE())
+ble_bond_prevalidation_test.run(ble)
 ```
+
+Remove the temporary call after recording the result. Do not call
+`ble.active(True)` just to circumvent an inactive-service error: that starts
+a new BTstack session whose saved identity and peer records have not
+necessarily been restored.
 
 Expected: six `PASS:` case messages and a final preserved-snapshot PASS.
 Do not use `BLE.bond_db(None)` or forget the macOS pairing.
@@ -282,3 +293,12 @@ The pinned BTstack repository has a CppUTest harness at
 
 The mock-based race tests are **specified, not yet implemented or run**.
 The existing Pico reconnect/HID success is not a substitute for this test.
+
+## Prevalidation test lifecycle correction (2026-11-11)
+
+A test invocation after `main.start()` returned failed on its initial
+`ble.bond_db()` export with `OSError: [Errno 5] EIO`; this was before any
+malformed inputs were submitted. The preceding service run showed successful
+bond restoration and encrypted reconnect, then `Controller service stopped`.
+Likely cause is inactive Bluetooth at the REPL. The script now reports a
+clear error for this condition. No six-case PASS result is claimed yet.
