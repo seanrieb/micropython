@@ -1,7 +1,7 @@
 diff --git a/src/ble/sm.c b/src/ble/sm.c
 --- a/src/ble/sm.c
 +++ b/src/ble/sm.c
-@@ -4861,8 +4861,19 @@ void sm_set_er(sm_key_t er){
+@@ -4861,7 +4861,18 @@ void sm_set_er(sm_key_t er){
  }
  
  void sm_set_ir(sm_key_t ir){
@@ -23,7 +23,7 @@ diff --git a/src/ble/sm.c b/src/ble/sm.c
 diff --git a/src/ble/sm.h b/src/ble/sm.h
 --- a/src/ble/sm.h
 +++ b/src/ble/sm.h
-@@ -78,6 +78,9 @@ void sm_set_er(sm_key_t er);
+@@ -78,5 +78,8 @@ void sm_set_er(sm_key_t er);
   */
  void sm_set_ir(sm_key_t ir);
  
