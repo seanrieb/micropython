@@ -87,6 +87,9 @@ volatile int mp_bluetooth_btstack_state = MP_BLUETOOTH_BTSTACK_STATE_OFF;
 #define BT_BOND_RECORD 53u
 static uint8_t bt_local_er[16], bt_local_ir[16];
 static bool bt_local_keys_valid;
+// A failed import must never expose or advertise partially restored bonds.
+// A successful import or explicit bond clear is required for recovery.
+static bool bt_bond_restore_failed;
 
 #if MICROPY_BLUETOOTH_DIAGNOSTICS
 // An SHA-256 digest truncated to eight bytes identifies key material
@@ -155,7 +158,7 @@ static bool bt_ensure_local_keys(void) {
 }
 
 size_t mp_btstack_bond_export(uint8_t *buf, size_t capacity) {
-    if (!mp_bluetooth_is_active() || !bt_ensure_local_keys()) {
+    if (!mp_bluetooth_is_active() || bt_bond_restore_failed || !bt_ensure_local_keys()) {
         return 0;
     }
     int count = le_device_db_count();
@@ -223,6 +226,10 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
             return false;
         }
     }
+    // Beyond this point the import modifies live key/database state.
+    // Reject advertising and snapshot exports until the import completes.
+    bt_bond_restore_failed = true;
+    bt_local_keys_valid = false;
     for (int i = 0; i < le_device_db_max_count(); ++i) {
         le_device_db_remove(i);
     }
@@ -242,7 +249,6 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
         mp_hal_delay_ms(1);
     }
     BT_DIAG("BTstack SMP: IRK/DHK regeneration complete\n");
-    bt_local_keys_valid = true;
     #if MICROPY_BLUETOOTH_DIAGNOSTICS
     char fp[17];
     bt_debug_sha256_fp(bt_local_er, 16, fp);
@@ -265,6 +271,8 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
         le_device_db_encryption_set(index, ediv, rand, ltk,
             rec[49], rec[50], rec[51], rec[52]);
     }
+    bt_local_keys_valid = true;
+    bt_bond_restore_failed = false;
     return true;
 }
 
@@ -284,7 +292,18 @@ bool mp_btstack_bond_clear(void) {
     memset(keys, 0, sizeof(keys));
     sm_set_er(bt_local_er);
     sm_set_ir(bt_local_ir);
+    // A bond clear is an explicit recovery operation; avoid exposing a
+    // new identity until its derived keys are available.
+    mp_uint_t dkg_start = mp_hal_ticks_ms();
+    while (!sm_derived_keys_ready()) {
+        if ((mp_uint_t)(mp_hal_ticks_ms() - dkg_start) >= 2000) {
+            BT_DIAG("BTstack SMP: bond clear rederive timed out\n");
+            return false;
+        }
+        mp_hal_delay_ms(1);
+    }
     bt_local_keys_valid = true;
+    bt_bond_restore_failed = false;
     return true;
 }
 #endif
@@ -992,6 +1011,7 @@ int mp_bluetooth_init(void) {
 
     #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     bt_local_keys_valid = false;
+    bt_bond_restore_failed = false;
     #endif
 
     // BLE.bond_db() will replace these bootstrap values with stable,
@@ -1232,6 +1252,13 @@ int mp_bluetooth_gap_set_device_name(const uint8_t *buf, size_t len) {
 
 int mp_bluetooth_gap_advertise_start(bool connectable, int32_t interval_us, const uint8_t *adv_data, size_t adv_data_len, const uint8_t *sr_data, size_t sr_data_len) {
     DEBUG_printf("mp_bluetooth_gap_advertise_start\n");
+
+    #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    if (bt_bond_restore_failed) {
+        BT_DIAG("BTstack SMP: advertising blocked after failed bond restore\n");
+        return MP_EIO;
+    }
+    #endif
 
     if (!mp_bluetooth_is_active()) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
