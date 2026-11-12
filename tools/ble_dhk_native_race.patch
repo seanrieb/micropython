@@ -1,0 +1,78 @@
+diff --git a/test/security_manager/security_manager.cpp b/test/security_manager/security_manager.cpp
+--- a/test/security_manager/security_manager.cpp
++++ b/test/security_manager/security_manager.cpp
+@@ -413,4 +413,74 @@
+ }
+ 
++// Assert that the outstanding HCI LE Encrypt request uses the supplied IR.
++// The mock captures each AES command and reports its result only on demand.
++static void dkg_expect_aes_key(const uint8_t * ir){
++    btstack_run_loop_embedded_execute_once();
++    uint8_t * command = mock_packet_buffer();
++    CHECK_TRUE(mock_packet_buffer_len() >= 35);
++    BYTES_EQUAL(0x17, command[0]);  // HCI LE Encrypt opcode low byte
++    BYTES_EQUAL(0x20, command[1]);  // HCI LE Encrypt opcode high byte
++    for (unsigned i = 0; i < 16; ++i){
++        BYTES_EQUAL(ir[15 - i], command[3 + i]);
++    }
++}
++
++static void dkg_finish_aes(void){
++    // Report the result of the captured AES command, then let the
++    // security manager advance its queued derivation state.
++    mock_clear_packet_buffer();
++    aes128_report_result();
++    btstack_run_loop_embedded_execute_once();
++}
++
++TEST(SecurityManager, DkgRekeyDuringAsyncAES){
++    // Execute this test alone (-n DkgRekeyDuringAsyncAES) while developing:
++    // the original SecurityManager fixture has process-global HCI mocks.
++    mock_init();
++
++    uint8_t ir_a[16], ir_b[16], ir_c[16], ir_d[16];
++    for (unsigned i = 0; i < 16; ++i){
++        ir_a[i] = (uint8_t)(0x10 + i);
++        ir_b[i] = (uint8_t)(0x30 + i);
++        ir_c[i] = (uint8_t)(0x50 + i);
++        ir_d[i] = (uint8_t)(0x70 + i);
++    }
++
++    sm_set_ir(ir_a);
++    mock_simulate_hci_state_working();
++    dkg_expect_aes_key(ir_a);  // IRK(A) is now in flight.
++    CHECK_FALSE(sm_derived_keys_ready());
++
++    sm_set_ir(ir_b);            // Change IR during IRK(A).
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();           // Discard IRK(A), restart.
++    dkg_expect_aes_key(ir_b);  // IRK(B)
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();
++    dkg_expect_aes_key(ir_b);  // DHK(B)
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();
++    CHECK_TRUE(sm_derived_keys_ready());
++
++    sm_set_ir(ir_c);
++    dkg_expect_aes_key(ir_c);  // IRK(C)
++    dkg_finish_aes();
++    dkg_expect_aes_key(ir_c);  // DHK(C) now in flight
++    sm_set_ir(ir_d);            // Change IR during DHK(C).
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();
++    dkg_expect_aes_key(ir_d);  // IRK(D), not READY
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();
++    dkg_expect_aes_key(ir_d);  // DHK(D)
++    CHECK_FALSE(sm_derived_keys_ready());
++    dkg_finish_aes();
++    CHECK_TRUE(sm_derived_keys_ready());
++
++    // Re-applying the identical IR must not schedule derivation.
++    sm_set_ir(ir_d);
++    CHECK_TRUE(sm_derived_keys_ready());
++    CHECK_EQUAL(0, mock_packet_buffer_len());
++}
+ int main (int argc, const char * argv[]){
+     // log into file using HCI_DUMP_PACKETLOGGER format
