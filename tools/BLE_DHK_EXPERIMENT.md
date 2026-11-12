@@ -176,3 +176,50 @@ succeeded and the HID mouse operated normally. This validates the ordinary
 saved-bond reconnect path after the revision. It does **not** yet exercise
 an intentional IR change during an active asynchronous AES request, nor
 confirm all cold-power-cycle and new-pairing regression cases.
+
+## Fail-closed bond restore revision (requires new device regression)
+
+The MicroPython adapter now tracks incomplete bond mutations. A structurally
+invalid snapshot is rejected before any state changes. Once a valid import
+begins modifying the live peer database or local root keys, snapshot exports
+and advertising remain blocked until every peer record has been restored and
+the DKG reports ready. If an AES readiness timeout or database insert fails,
+a subsequent advertising attempt returns EIO rather than using partial state.
+An explicit successful `BLE.bond_db(None)` clear or successful re-import
+recovers the state; a normal Bluetooth reinitialization also resets it.
+
+This is **fail-closed**, not fully transactional: it does not roll back the
+previous keys and peer records. Do not delete the saved JSON or invoke clear
+while diagnosing a failure. The existing application's bond restore path
+must check and propagate `BLE.bond_db(snapshot)` exceptions.
+
+### Hardware regression procedure
+
+1. Rebuild and flash the revision without deleting the original mode-6
+   snapshot or forgetting the Mac's pairing.
+2. Verify an ordinary bonded mode-6 reconnect, encrypted status 0x00,
+   identical saved snapshot fingerprint, and working mouse HID.
+3. Repeat after a full power disconnect/reconnect.
+4. Before BLE advertising, attempt to import a deliberately malformed
+   snapshot (e.g. altered magic) on a disposable test setup. Confirm
+   `ValueError` and that this prevalidation failure does not poison the
+   previously valid state. Do not mutate the persisted JSON file.
+5. In a separate disposable test setup, inject a post-mutation failure
+   (e.g. controlled timeout or database-add error) and confirm subsequent
+   advertising returns EIO and bond export refuses the partial state.
+   Do not simulate this with the production bond data.
+6. Recover with a valid saved snapshot; verify encryption and HID again.
+
+### Targeted mid-AES IR race test
+
+The revised BTstack source contains a restart flag but normal HID tests do
+not force the race. Use a native BTstack test harness with a queued/stubbed
+AES engine. Start IRK derivation for IR=A; before its callback, install IR=B.
+Verify readiness stays false, both IRK and DHK eventually derive from B, and
+only then does readiness become true. Repeat with the change made during
+DHK derivation, and with A->B->C changes. Assert an unchanged IR does not
+schedule another derivation. A matching hardware reconnect is necessary but
+not a substitute for these state-machine tests.
+
+Release gate: the new fail-closed adapter code is NOT yet validated by a
+local build, native race test, or Pico hardware run.
