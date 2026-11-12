@@ -138,7 +138,7 @@ diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
  
  all: build-coverage/security_manager build-asan/security_manager
  
-@@ -77,6 +95,6 @@
+@@ -77,5 +95,5 @@
  	rm -f build-coverage/*.gcda
  	build-coverage/security_manager
  
@@ -146,4 +146,3 @@ diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
 -	rm -rf build-coverage build-asan
 +clean:
 +	rm -rf build-coverage build-asan build-dkg
- 
