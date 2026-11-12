@@ -1,33 +1,101 @@
 diff --git a/src/ble/sm.c b/src/ble/sm.c
 --- a/src/ble/sm.c
 +++ b/src/ble/sm.c
-@@ -4861,7 +4861,18 @@ void sm_set_er(sm_key_t er){
+@@ -229,7 +229,9 @@
+ // derived from sm_persistent_ir
+ static sm_key_t sm_persistent_dhk;
+ static sm_key_t sm_persistent_irk;
+-static derived_key_generation_t dkg_state;
++static derived_key_generation_t dkg_state;
++// Set when IR changes; finish any in-flight DKG AES request, then restart.
++static bool sm_dkg_restart_required;
+ 
+ // derived from sm_persistent_er
+ // ..
+@@ -2150,8 +2152,11 @@
+                 log_info("DKG_CALC_IRK started");
+                 // IRK = d1(IR, 1, 0)
+                 sm_d1_d_prime(1, 0, sm_aes128_plaintext);  // plaintext = d1 prime
+-                sm_aes128_state = SM_AES128_ACTIVE;
+-                btstack_crypto_aes128_encrypt(&sm_crypto_aes128_request, sm_persistent_ir, sm_aes128_plaintext, sm_persistent_irk, sm_handle_encryption_result_dkg_irk, NULL);
++                sm_aes128_state = SM_AES128_ACTIVE;
++                // This request uses the current IR. A later change sets the
++                // restart flag, which the completion callback honors.
++                sm_dkg_restart_required = false;
++                btstack_crypto_aes128_encrypt(&sm_crypto_aes128_request, sm_persistent_ir, sm_aes128_plaintext, sm_persistent_irk, sm_handle_encryption_result_dkg_irk, NULL);
+                 return true;
+             }
+             break;
+@@ -3502,11 +3507,11 @@
+     sm_aes128_state = SM_AES128_IDLE;
+ 
+     log_info_key("irk", sm_persistent_irk);
+-    dkg_state = DKG_CALC_DHK;
+-    sm_trigger_run();
+-}
+-
+-static void sm_handle_encryption_result_dkg_dhk
++    dkg_state = sm_dkg_restart_required ? DKG_CALC_IRK : DKG_CALC_DHK;
++    sm_trigger_run();
++}
++
++static void sm_handle_encryption_result_dkg_dhk
+     UNUSED(arg);
+     sm_aes128_state = SM_AES128_IDLE;
+ 
+@@ -3511,11 +3516,11 @@
+     sm_aes128_state = SM_AES128_IDLE;
+ 
+     log_info_key("dhk", sm_persistent_dhk);
+-    dkg_state = DKG_READY;
+-    sm_trigger_run();
+-}
+-
+-static void sm_handle_encryption_result_rau
++    dkg_state = sm_dkg_restart_required ? DKG_CALC_IRK : DKG_READY;
++    sm_trigger_run();
++}
++
++static void sm_handle_encryption_result_rau
+     UNUSED(arg);
+     sm_aes128_state = SM_AES128_IDLE;
+ 
+@@ -4860,9 +4865,21 @@
+     (void)memcpy(sm_persistent_er, er, 16);
  }
  
- void sm_set_ir(sm_key_t ir){
-     (void)memcpy(sm_persistent_ir, ir, 16);
-+    // Experiment: rederive IRK/DHK after application restores a saved IR.
-+    // The HCI_STATE_WORKING handler originally derived these from the
-+    // bootstrap IR, which may be all zeros. Do not retain that old DHK.
+-void sm_set_ir(sm_key_t ir){
+-    (void)memcpy(sm_persistent_ir, ir, 16);
+-}
++void sm_set_ir(sm_key_t ir){
++    if (memcmp(sm_persistent_ir, ir, 16) == 0) return;
++    (void)memcpy(sm_persistent_ir, ir, 16);
++    // If a derivation is in flight, its callback must not advance to READY
++    // using stale key material. The next IRK calculation clears this flag.
 +    if (sm_initialized && hci_get_state() == HCI_STATE_WORKING){
++        sm_dkg_restart_required = true;
 +        dkg_state = DKG_CALC_IRK;
 +        sm_trigger_run();
 +    }
 +}
 +
 +bool sm_derived_keys_ready(void){
-+    return dkg_state == DKG_READY;
- }
++    return dkg_state == DKG_READY && !sm_dkg_restart_required;
++}
  
  // Testing support only
+ void sm_test_set_irk(sm_key_t irk){
 diff --git a/src/ble/sm.h b/src/ble/sm.h
 --- a/src/ble/sm.h
 +++ b/src/ble/sm.h
-@@ -79,4 +79,7 @@ void sm_set_er(sm_key_t er);
+@@ -77,7 +77,10 @@
+  * @note If not set and btstack_tlv is configured, IR key is generated and stored in TLV by SM
+  * @param ir key
   */
  void sm_set_ir(sm_key_t ir);
- 
-+// Experimental diagnostic: true when IRK and DHK derivation has completed.
-+bool sm_derived_keys_ready(void);
 +
++// True when IRK and DHK match the most recently installed IR.
++bool sm_derived_keys_ready(void);
+ 
  /**
+  * @brief Registers OOB Data Callback. The callback should set the oob_data and return 1 if OOB data is availble
