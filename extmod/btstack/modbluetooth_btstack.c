@@ -89,6 +89,17 @@ static uint8_t bt_local_er[16], bt_local_ir[16];
 static bool bt_local_keys_valid;
 
 #if MICROPY_BLUETOOTH_DIAGNOSTICS
+// Raw key probe enabled only on the experiment branch. The values below
+// are temporary pairing secrets; do not distribute release firmware.
+static void bt_debug_hex16(const uint8_t *buf, char out[33]) {
+    static const char h[] = "0123456789abcdef";
+    for (size_t i = 0; i < 16; i++) {
+        out[2 * i] = h[buf[i] >> 4];
+        out[2 * i + 1] = h[buf[i] & 0x0f];
+    }
+    out[32] = 0;
+}
+
 // An SHA-256 digest truncated to eight bytes identifies key material
 // without disclosing it. Never print raw LTK, ER, or IR.
 static void bt_debug_sha256_fp(const uint8_t *data, size_t len, char out[17]) {
@@ -125,6 +136,12 @@ static bool bt_ltk_diagnostic_callback(hci_con_handle_t handle,
     bt_debug_sha256_fp(bt_local_er, 16, er);
     BT_DIAG("BTstack SMP: LTK derived handle=%u fp=%s hci_order_fp=%s er_fp=%s\n",
         (unsigned)handle, derived, controller_order, er);
+    char ltk_raw[33], ltk_hci_raw[33], er_raw[33];
+    bt_debug_hex16(ltk, ltk_raw);
+    bt_debug_hex16(reversed, ltk_hci_raw);
+    bt_debug_hex16(bt_local_er, er_raw);
+    BT_DIAG("BTstack RAW: handle=%u ltk=%s hci_ltk=%s local_er=%s\n",
+        (unsigned)handle, ltk_raw, ltk_hci_raw, er_raw);
     memset(reversed, 0, sizeof(reversed));
     return false;
 }
@@ -150,6 +167,11 @@ static bool bt_ensure_local_keys(void) {
     char fp[17];
     bt_debug_sha256_fp(bt_local_er, 16, fp);
     BT_DIAG("BTstack SMP: generated local ER fp=%s\n", fp);
+    char er_raw[33], ir_raw[33];
+    bt_debug_hex16(bt_local_er, er_raw);
+    bt_debug_hex16(bt_local_ir, ir_raw);
+    BT_DIAG("BTstack RAW: generate local_er=%s local_ir=%s\n",
+        er_raw, ir_raw);
     #endif
     return true;
 }
@@ -235,6 +257,11 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
     char fp[17];
     bt_debug_sha256_fp(bt_local_er, 16, fp);
     BT_DIAG("BTstack SMP: restored local ER fp=%s\n", fp);
+    char er_raw[33], ir_raw[33];
+    bt_debug_hex16(bt_local_er, er_raw);
+    bt_debug_hex16(bt_local_ir, ir_raw);
+    BT_DIAG("BTstack RAW: restore local_er=%s local_ir=%s\n",
+        er_raw, ir_raw);
     #endif
     for (unsigned i = 0; i < count; ++i) {
         const uint8_t *rec = data + BT_BOND_HEADER + i * BT_BOND_RECORD;
@@ -490,6 +517,9 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
                 bt_debug_sha256_fp(peer_ltk, sizeof(peer_ltk), peer_fp);
                 BT_DIAG("BTstack SMP: pair peer_LTK_fp=%s key_size=%d secure=%d\n",
                     peer_fp, key_size, secure);
+                char peer_raw[33];
+                bt_debug_hex16(peer_ltk, peer_raw);
+                BT_DIAG("BTstack RAW: pair peer_ltk=%s\n", peer_raw);
                 memset(peer_ltk, 0, sizeof(peer_ltk));
             }
         }
