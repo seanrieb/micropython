@@ -66,3 +66,60 @@ the original UF2 for an exact binary restore where possible.
 
 The patch is an experiment, not an upstream BTstack fix. It has not been
 validated with a local native build.
+
+## Verification results (2026-11-11)
+
+Pico 2 W running MicroPython v1.29.0-53.gd328f32bfd.dirty:
+five consecutive bonded reconnections to macOS completed without re-pairing.
+All five logs reported `IRK/DHK regeneration complete`, an unchanged
+93-byte one-record bond database, `re-encryption complete ... status=0x00`,
+128-bit key size, and GATT reads/writes. HID mouse operation was verified.
+macOS PacketLogger traces `verification1.pklg` and `verification2.pklg`
+were supplied for independent comparison. These captures are not committed
+because they can contain security-sensitive key material. Reported host-side
+disconnection reason 0x08 (connection timeout) followed Pico restarts.
+The logs do not definitively categorize each restart as a soft reset or cold
+power cycle.
+
+The experimental build confirmed the entire native 128-bit legacy LTK and
+its HCI byte-order representation matched the macOS encryption command.
+Do not include raw keys in permanent documentation.
+
+## Hardening review and remaining gates
+
+The successful experiment isolates the stale-DHK root cause, but a clean
+long-term fix still requires review of BTstack's DKG state-machine behavior:
+- `sm_set_ir()` must preserve IRK/DHK consistency when IR changes after
+  initialization, including a repeated update during an in-flight derivation.
+- Determine whether an active security procedure can observe inconsistent
+  keys during a change; do not trigger IR changes during active connections
+  without an explicit safety policy.
+- `sm_derived_keys_ready()` currently reports `dkg_state == DKG_READY`.
+  Assess whether this can falsely report ready for the wrong IR generation.
+- The MicroPython import waits up to 2000 ms with `mp_hal_delay_ms(1)`.
+  Verify that run-loop progress is guaranteed in this context, and preserve
+  a deterministic failure path if the cryptographic engine stalls.
+- Bond import currently clears the peer database and updates local ER/IR
+  *before* checking derivation completion, so failure is not transactional.
+  A future change should avoid leaving partially restored state.
+- Validate both existing bonded reconnect and brand-new pairing, including
+  soft reset, power-cycle, and disconnect/reconnect.
+
+## Safe diagnostic cleanup branch
+
+`fix/rp2350-ble-dhk-hardening` branches from the validated experiment.
+It removes raw ER, IR, and LTK diagnostic printing in the MicroPython adapter,
+while retaining nonsecret SHA-256 fingerprints and encryption status messages.
+The original experiment branch is deliberately untouched as a reproducible
+reference. The BTstack patch and synchronous readiness wait are not changed
+in this cleanup, because state-machine/scheduler modifications require
+separate code review and device regression testing.
+
+When using the hardening branch, first reverse the old patch in the local
+BTstack submodule only if switching to a different patch revision. Since this
+branch currently uses the same patch, keep it applied; `git pull` does not
+manage local submodule source modifications.
+
+Do not promote this branch to production until a clean RP2350 build and
+on-device reconnect tests pass. An existing build made before the cleanup
+still contains plaintext key diagnostics.
