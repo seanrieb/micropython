@@ -42,7 +42,7 @@ def run():
         _expect_exception("snapshot export blocked",
                           lambda: ble.bond_db(), OSError)
         _expect_exception("advertising blocked",
-                          lambda: ble.gap_advertise(100000, adv_data=b"\\x02\\x01\\x06"),
+                          lambda: ble.gap_advertise(100000, adv_data=bytes((2, 1, 6))),
                           OSError)
 
         # Re-import the same snapshot. This is the required recovery path,
@@ -52,7 +52,7 @@ def run():
             raise AssertionError("snapshot changed after recovery")
         print("PASS: successful reimport restores exact snapshot")
 
-        ble.gap_advertise(100000, adv_data=b"\\x02\\x01\\x06")
+        ble.gap_advertise(100000, adv_data=bytes((2, 1, 6)))
         ble.gap_advertise(None)
         print("PASS: advertising unblocked after recovery")
         print("PASS: post-mutation fail-closed and recovery regression")
