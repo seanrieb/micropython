@@ -36,10 +36,6 @@
 
 #include "lib/btstack/src/btstack.h"
 
-#if MICROPY_BLUETOOTH_DIAGNOSTICS && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
-#include "mbedtls/version.h"
-#include "mbedtls/sha256.h"
-#endif
 
 #define DEBUG_printf(...) // printf("btstack: " __VA_ARGS__)
 
@@ -57,6 +53,11 @@
 #define BT_DIAG(...) mp_printf(&mp_plat_print, __VA_ARGS__)
 #else
 #define BT_DIAG(...) ((void)0)
+#endif
+
+#if MICROPY_BLUETOOTH_DIAGNOSTICS && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+#include "mbedtls/version.h"
+#include "mbedtls/sha256.h"
 #endif
 
 #ifndef MICROPY_PY_BLUETOOTH_DEFAULT_GAP_NAME
