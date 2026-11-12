@@ -111,7 +111,7 @@ diff --git a/test/security_manager/btstack_config.h b/test/security_manager/btst
 diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
 --- a/test/security_manager/Makefile
 +++ b/test/security_manager/Makefile
-@@ -43,7 +43,23 @@
+@@ -43,7 +43,25 @@
  LDFLAGS_ASAN     = ${LDFLAGS} -fsanitize=address
  
  COMMON_OBJ_COVERAGE = $(addprefix build-coverage/,$(COMMON:.c=.o)) build-coverage/uECC.o
@@ -119,6 +119,8 @@ diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
 +COMMON_OBJ_ASAN     = $(addprefix build-asan/,    $(COMMON:.c=.o)) build-asan/uECC.o
 +COMMON_OBJ_DKG      = $(addprefix build-dkg/,     $(COMMON:.c=.o))
 +CFLAGS_DKG          = ${CFLAGS} -DBTSTACK_DKG_TEST_HCI_AES
++
++.DEFAULT_GOAL := all
 +
 +# Dedicated controller-AES build for the deterministic DKG race regression.
 +# Keep the existing CppUTest targets and their software-AES configuration.
@@ -136,10 +138,7 @@ diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
  
  all: build-coverage/security_manager build-asan/security_manager
  
-diff --git a/test/security_manager/Makefile b/test/security_manager/Makefile
---- a/test/security_manager/Makefile
-+++ b/test/security_manager/Makefile
-@@ -77,6 +77,6 @@
+@@ -77,6 +95,6 @@
  	rm -f build-coverage/*.gcda
  	build-coverage/security_manager
  
