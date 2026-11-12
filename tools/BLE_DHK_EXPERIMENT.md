@@ -502,3 +502,26 @@ hardening firmware before running the controller or performing fresh
 pairing. The normal build must omit the
 `MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST` CMake option (default OFF).
 Fresh pairing remains the final planned hardware validation gate.
+
+## Fresh pairing on second Mac: PASS, cold-reconnect pending (2026-11-11)
+
+With a separately backed-up mode-6 settings file removed (other mode
+settings untouched), a normal hardening Pico 2 W build generated a
+new local ER and 40-byte empty-bond snapshot. The second Mac paired using
+Just Works, with `pairing complete ... status=0x00 reason=0x00`,
+`key_size=16`, and `authenticated=0` (expected for Just Works).
+The live bond database changed from `count=0 len=40` to
+`count=1 len=93`, and the application reported
+`BLE BOND FLUSH ... ok=True ... match_memory=True`. A subsequent live
+security event reported `encrypted-1-bonded-1` and the new saved bond
+fingerprint `5fc875da86c81fda`. This establishes first-time pairing,
+bond insertion, and persistence to disk.
+
+Cold-start restoration and re-encryption of this *new* bond remain to be
+verified. Do not conflate the initial `bonded-0` security event during
+pairing with the final persisted `bonded-1` state; the intermediate event
+precedes the new bond record being saved.
+
+The previous first-Mac bond was backed up separately and must be
+restored only after the second-Mac cold-start validation. Never
+commit raw bond snapshots or key material.
