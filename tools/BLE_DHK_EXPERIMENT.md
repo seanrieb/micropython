@@ -525,3 +525,27 @@ precedes the new bond record being saved.
 The previous first-Mac bond was backed up separately and must be
 restored only after the second-Mac cold-start validation. Never
 commit raw bond snapshots or key material.
+
+## Second Mac cold-start bonded reconnect: PASS (2026-11-11)
+
+After successful pairing from a new, empty mode-6 identity and
+persistence of the one-record bond, the user power-cycled the Pico 2 W.
+The second Mac reconnected successfully without re-pairing. This
+completes the clean-identity pairing + persistence + cold-start
+reconnection hardware regression.
+
+The cold-start reconnect result was reported as successful; no new
+per-event console trace was supplied for this particular cycle, so
+do not claim individual status fields or fingerprints beyond the prior
+fresh-pairing output. The earlier first-Mac bonded reconnect tests
+independently provided detailed HCI encryption status.
+Keep both machines' bond files and credentials out of the repo.
+
+**Validation summary:** Existing legacy bond reconnects, six malformed
+snapshot rejection cases with unchanged live snapshot, native
+mid-AES IR-change race (144 checks), one-shot post-mutation failure
+injection with fail-closed advertising/export and recovery, and
+second-Mac fresh pairing plus cold-start reconnect have passed.
+Merge preparation/review remains, including removing temporary
+test-only hooks from production configuration and checking the working
+BTstack submodule patch against the source branch.
