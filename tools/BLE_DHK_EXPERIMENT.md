@@ -167,3 +167,12 @@ For additional race-focused tests, exercise repeated IR restores *before*
 advertising (including duplicate snapshots) and verify that readiness
 never signals before IRK/DHK both finish. A deliberate mid-AES IR update
 requires a controlled native harness or explicitly instrumented firmware.
+
+## Revised DKG guard: initial hardware validation (2026-11-11)
+
+The RP2350/Pico 2 W hardening revision with the pending-restart guard was
+built and flashed by the tester. The existing mode-6 bonded connection
+succeeded and the HID mouse operated normally. This validates the ordinary
+saved-bond reconnect path after the revision. It does **not** yet exercise
+an intentional IR change during an active asynchronous AES request, nor
+confirm all cold-power-cycle and new-pairing regression cases.
