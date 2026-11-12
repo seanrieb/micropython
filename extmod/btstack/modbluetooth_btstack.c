@@ -468,6 +468,32 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
             (unsigned)sm_event_pairing_complete_get_handle(packet),
             (unsigned)sm_event_pairing_complete_get_status(packet),
             (unsigned)sm_event_pairing_complete_get_reason(packet));
+        #if MICROPY_BLUETOOTH_DIAGNOSTICS
+        // Pairing-side observation: the saved peer database LTK is the
+        // central's distributed key, NOT the peripheral's transmitted LTK.
+        // Pairing LTK distribution itself is observed in macOS PacketLogger.
+        uint16_t pair_handle = sm_event_pairing_complete_get_handle(packet);
+        hci_connection_t *pair_conn = hci_connection_for_handle(pair_handle);
+        if (pair_conn != NULL) {
+            int peer_index = pair_conn->sm_connection.sm_le_db_index;
+            char er_fp[17];
+            bt_debug_sha256_fp(bt_local_er, sizeof(bt_local_er), er_fp);
+            BT_DIAG("BTstack SMP: pair local_ER_fp=%s peer_db_index=%d\n",
+                er_fp, peer_index);
+            if (peer_index >= 0) {
+                sm_key_t peer_ltk;
+                int key_size = 0, authenticated = 0;
+                int authorized = 0, secure = 0;
+                le_device_db_encryption_get(peer_index, NULL, NULL, peer_ltk,
+                    &key_size, &authenticated, &authorized, &secure);
+                char peer_fp[17];
+                bt_debug_sha256_fp(peer_ltk, sizeof(peer_ltk), peer_fp);
+                BT_DIAG("BTstack SMP: pair peer_LTK_fp=%s key_size=%d secure=%d\n",
+                    peer_fp, key_size, secure);
+                memset(peer_ltk, 0, sizeof(peer_ltk));
+            }
+        }
+        #endif
     } else if (event_type == SM_EVENT_REENCRYPTION_COMPLETE) {
         BT_DIAG( "BTstack SMP: re-encryption complete handle=%u status=0x%02x\n",
             (unsigned)sm_event_reencryption_complete_get_handle(packet),
