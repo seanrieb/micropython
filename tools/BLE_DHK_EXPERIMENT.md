@@ -223,3 +223,11 @@ not a substitute for these state-machine tests.
 
 Release gate: the new fail-closed adapter code is NOT yet validated by a
 local build, native race test, or Pico hardware run.
+
+## Fail-closed revision: ordinary reconnect regression (2026-11-11)
+
+Tester confirmed the latest fail-closed bond restoration build runs on Pico 2 W,
+restores the existing bonded connection, and operates the BLE HID mouse.
+This validates the normal success path after the fail-closed changes. It does
+not establish that injected post-mutation failures are blocked, that the
+mid-AES race is exercised, or that a fresh pairing has been tested.
