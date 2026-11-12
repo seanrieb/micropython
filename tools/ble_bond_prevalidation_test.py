@@ -11,7 +11,18 @@ BLE instance or before your application restores its saved snapshot.
 """
 
 def run(ble):
-    snapshot = ble.bond_db()
+    if not ble.active():
+        raise RuntimeError(
+            "BLE inactive: run inside the active controller service after "
+            "bond restore, before Bluetooth shutdown"
+        )
+    try:
+        snapshot = ble.bond_db()
+    except OSError as exc:
+        raise RuntimeError(
+            "BLE bond export failed: run after the service has restored "
+            "its bond, while Bluetooth is still active"
+        ) from exc
     if len(snapshot) < 40 or snapshot[:4] != b"BLB1":
         raise AssertionError("Expected active, restored BLB1 bond snapshot")
     count = snapshot[4]
