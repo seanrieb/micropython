@@ -1,13 +1,15 @@
 """Non-destructive RP2350 BTstack bond snapshot validation regression.
 
-Run after the controller's BLE application has restored its existing bond:
-    import bluetooth
+Call from inside the running controller service after it has restored the
+saved bond and before it deinitializes Bluetooth. Example at that point:
     import ble_bond_prevalidation_test
-    ble_bond_prevalidation_test.run(bluetooth.BLE())
+    ble_bond_prevalidation_test.run(ble)
 
-No file writes, no bond clear, and no raw key output. This deliberately
-tests only pre-mutation rejection paths. Do NOT call with an uninitialized
-BLE instance or before your application restores its saved snapshot.
+If main.start() has returned and printed "Controller service stopped",
+Bluetooth may already be inactive and bond export will fail with EIO.
+
+This test never writes files or clears bonds. Do not run it before the
+service restores the original bond.
 """
 
 def run(ble):
