@@ -472,3 +472,33 @@ The test option is now implemented as a target-local CMake definition
 and defaults to OFF. Use a **new** `-bond-fault-v2` build directory,
 so cached global compiler flags from the failed build cannot persist.
 Do not work around the error by disabling software spin locks.
+
+## Post-mutation fail-closed hardware test: PASS (2026-11-11)
+
+The dedicated RP2350 fault-injection firmware was tested on the Pico 2 W.
+The console reported the expected test hook after generating a local ER
+fingerprint, followed by all six checks:
+
+```text
+BTstack SMP: TEST injected post-mutation bond import failure
+PASS: injected import rejected
+PASS: snapshot export blocked
+BTstack SMP: advertising blocked after failed bond restore
+PASS: advertising blocked
+BTstack SMP: IRK/DHK regeneration complete
+PASS: successful reimport restores exact snapshot
+PASS: advertising unblocked after recovery
+PASS: post-mutation fail-closed and recovery regression
+```
+
+This demonstrates the production fail-closed guards work in the
+fault-enabled test build after live database mutation, and a subsequent
+valid import can recover. The test uses a session-local snapshot; it does
+not establish that an existing paired peer could reconnect to this test
+identity. No raw key material is recorded.
+
+**Important:** Replace the fault-injection UF2 with the known-good normal
+hardening firmware before running the controller or performing fresh
+pairing. The normal build must omit the
+`MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST` CMake option (default OFF).
+Fresh pairing remains the final planned hardware validation gate.
