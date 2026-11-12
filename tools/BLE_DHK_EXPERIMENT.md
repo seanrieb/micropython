@@ -116,10 +116,54 @@ in this cleanup, because state-machine/scheduler modifications require
 separate code review and device regression testing.
 
 When using the hardening branch, first reverse the old patch in the local
-BTstack submodule only if switching to a different patch revision. Since this
-branch currently uses the same patch, keep it applied; `git pull` does not
-manage local submodule source modifications.
+BTstack submodule only if switching to a different patch revision. This branch now has a **revised** patch. If your local submodule still
+has the original experimental patch applied, reverse that original patch
+before applying this revision. `git pull` does not manage local submodule
+source modifications.
 
 Do not promote this branch to production until a clean RP2350 build and
 on-device reconnect tests pass. An existing build made before the cleanup
 still contains plaintext key diagnostics.
+
+## State-machine hardening revision (unverified on hardware)
+
+The hardened patch updates `sm_set_ir()` to skip identical IR values and
+mark a changed IR as requiring fresh IRK/DHK derivation. The completion
+callbacks check a pending-restart flag rather than unconditionally advancing
+to `DKG_CALC_DHK` or `DKG_READY`. Starting the IRK AES request clears
+the flag; another IR change during either asynchronous AES request sets it
+again. `sm_derived_keys_ready()` requires both READY and no pending restart.
+
+This addresses one identified callback-overwrites-state race. It does NOT
+establish a safe API for arbitrary IR changes during active encrypted
+connections, nor make bond imports atomic. Application code must continue
+to restore bonds before advertising or accepting connections.
+
+### Upgrade from the previously tested patch
+
+From the repository root, with a local old experimental patch applied:
+
+```sh
+git fetch origin
+git show origin/experiment/ble-raw-key-probe:tools/ble_dhk_rederive.patch > /tmp/ble-dhk-v1.patch
+git -C lib/btstack apply --check -R /tmp/ble-dhk-v1.patch
+git -C lib/btstack apply -R /tmp/ble-dhk-v1.patch
+git switch fix/rp2350-ble-dhk-hardening
+git -C lib/btstack apply --check ../../tools/ble_dhk_rederive.patch
+git -C lib/btstack apply ../../tools/ble_dhk_rederive.patch
+git -C lib/btstack diff --check
+cd ports/rp2
+make BOARD=RPI_PICO2_W
+```
+
+If `git -C lib/btstack status --short` is clean before starting, omit
+the old-patch reverse operations. Do not run `git submodule update --force`
+with local modifications present.
+
+Flash, preserve the existing BLE bond and Mac pairing, and retest reconnect
+and HID. The new revision has not been built or flashed by the assistant.
+
+For additional race-focused tests, exercise repeated IR restores *before*
+advertising (including duplicate snapshots) and verify that readiness
+never signals before IRK/DHK both finish. A deliberate mid-AES IR update
+requires a controlled native harness or explicitly instrumented firmware.
