@@ -543,6 +543,14 @@ target_include_directories(${MICROPY_TARGET} PRIVATE
     "${CMAKE_BINARY_DIR}"
 )
 
+# Explicitly opt in to the one-shot post-mutation BLE bond-import test.
+# Do not apply this definition globally: Pico SDK architecture flags must
+# remain controlled by the RP2350 toolchain.
+option(MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST "Enable test-only BLE bond-import fault injection" OFF)
+if(MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST)
+    target_compile_definitions(${MICROPY_TARGET} PRIVATE MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST=1)
+endif()
+
 target_compile_options(${MICROPY_TARGET} PRIVATE
     -Wall
     -Werror
