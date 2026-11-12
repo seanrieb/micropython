@@ -391,7 +391,7 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
         uint16_t ltk_ediv = (uint16_t)packet[13] |
             ((uint16_t)packet[14] << 8);
         // Printed in HCI/native byte order to compare with the Mac trace.
-        BT_DIAG("BTstack SMP: LTK request handle=%u ediv=0x%04x rand_hci=%02x%02x%02x%02x%02x%02x%02x%02x\\n",
+        BT_DIAG("BTstack SMP: LTK request handle=%u ediv=0x%04x rand_hci=%02x%02x%02x%02x%02x%02x%02x%02x\n",
             (unsigned)ltk_handle, (unsigned)ltk_ediv,
             (unsigned)packet[5], (unsigned)packet[6],
             (unsigned)packet[7], (unsigned)packet[8],
@@ -526,12 +526,12 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
         // A peer database entry being present does not imply that the
         // controller accepted the key or established encryption.
         if (hci_con == NULL) {
-            BT_DIAG("BTstack SMP: status handle=%u missing_hci_connection\\n",
+            BT_DIAG("BTstack SMP: status handle=%u missing_hci_connection\n",
                 (unsigned)conn_handle);
             return;
         }
         sm_connection_t *desc = &hci_con->sm_connection;
-        BT_DIAG("BTstack SMP: status handle=%u event=0x%02x db_index=%d encrypted=%u authenticated=%u key_size=%u\\n",
+        BT_DIAG("BTstack SMP: status handle=%u event=0x%02x db_index=%d encrypted=%u authenticated=%u key_size=%u\n",
             (unsigned)conn_handle, (unsigned)event_type,
             (int)desc->sm_le_db_index,
             (unsigned)desc->sm_connection_encrypted,
