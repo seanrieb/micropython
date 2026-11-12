@@ -36,6 +36,11 @@
 
 #include "lib/btstack/src/btstack.h"
 
+#if MICROPY_BLUETOOTH_DIAGNOSTICS && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+#include "mbedtls/version.h"
+#include "mbedtls/sha256.h"
+#endif
+
 #define DEBUG_printf(...) // printf("btstack: " __VA_ARGS__)
 
 // RP2350/CYW43 feature-branch diagnostics are on for reconnect investigation.
@@ -82,6 +87,48 @@ volatile int mp_bluetooth_btstack_state = MP_BLUETOOTH_BTSTACK_STATE_OFF;
 static uint8_t bt_local_er[16], bt_local_ir[16];
 static bool bt_local_keys_valid;
 
+#if MICROPY_BLUETOOTH_DIAGNOSTICS
+// An SHA-256 digest truncated to eight bytes identifies key material
+// without disclosing it. Never print raw LTK, ER, or IR.
+static void bt_debug_sha256_fp(const uint8_t *data, size_t len, char out[17]) {
+    uint8_t hash[32];
+    static const char hex[] = "0123456789abcdef";
+    #if MBEDTLS_VERSION_NUMBER >= 0x02070000 && MBEDTLS_VERSION_NUMBER < 0x03000000
+    (void)mbedtls_sha256_ret(data, len, hash, 0);
+    #else
+    (void)mbedtls_sha256(data, len, hash, 0);
+    #endif
+    for (size_t i = 0; i < 8; ++i) {
+        out[2 * i] = hex[hash[i] >> 4];
+        out[2 * i + 1] = hex[hash[i] & 15];
+    }
+    out[16] = 0;
+    memset(hash, 0, sizeof(hash));
+}
+
+// BTstack invokes this *after* reconstructing the peripheral LTK and
+// immediately before sm.c reverses it for HCI LE LTK Request Reply.
+// The callback return value is ignored by BTstack at this site.
+// This observer never writes into ltk and never changes pairing behavior.
+static bool bt_ltk_diagnostic_callback(hci_con_handle_t handle,
+    uint8_t address_type, bd_addr_t address, uint8_t *ltk) {
+    (void)address_type;
+    (void)address;
+    char derived[17], controller_order[17], er[17];
+    uint8_t reversed[16];
+    for (size_t i = 0; i < 16; ++i) {
+        reversed[i] = ltk[15 - i];
+    }
+    bt_debug_sha256_fp(ltk, 16, derived);
+    bt_debug_sha256_fp(reversed, 16, controller_order);
+    bt_debug_sha256_fp(bt_local_er, 16, er);
+    BT_DIAG("BTstack SMP: LTK derived handle=%u fp=%s hci_order_fp=%s er_fp=%s\n",
+        (unsigned)handle, derived, controller_order, er);
+    memset(reversed, 0, sizeof(reversed));
+    return false;
+}
+#endif
+
 extern bool btstack_crypto_platform_random_generate(uint8_t *output, uint16_t len);
 
 static bool bt_ensure_local_keys(void) {
@@ -98,6 +145,11 @@ static bool bt_ensure_local_keys(void) {
     sm_set_er(bt_local_er);
     sm_set_ir(bt_local_ir);
     bt_local_keys_valid = true;
+    #if MICROPY_BLUETOOTH_DIAGNOSTICS
+    char fp[17];
+    bt_debug_sha256_fp(bt_local_er, 16, fp);
+    BT_DIAG("BTstack SMP: generated local ER fp=%s\n", fp);
+    #endif
     return true;
 }
 
@@ -178,6 +230,11 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
     sm_set_er(bt_local_er);
     sm_set_ir(bt_local_ir);
     bt_local_keys_valid = true;
+    #if MICROPY_BLUETOOTH_DIAGNOSTICS
+    char fp[17];
+    bt_debug_sha256_fp(bt_local_er, 16, fp);
+    BT_DIAG("BTstack SMP: restored local ER fp=%s\n", fp);
+    #endif
     for (unsigned i = 0; i < count; ++i) {
         const uint8_t *rec = data + BT_BOND_HEADER + i * BT_BOND_RECORD;
         bd_addr_t addr;
@@ -890,6 +947,9 @@ int mp_bluetooth_init(void) {
     l2cap_init();
     le_device_db_init();
     sm_init();
+    #if MICROPY_BLUETOOTH_DIAGNOSTICS && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    sm_register_ltk_callback(bt_ltk_diagnostic_callback);
+    #endif
 
     #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     bt_local_keys_valid = false;
