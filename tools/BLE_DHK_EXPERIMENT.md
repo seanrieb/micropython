@@ -431,16 +431,16 @@ Example out-of-tree build from the MicroPython repository root,
 using the existing patched BTstack submodule:
 
 ```sh
-cmake -S ports/rp2 -B ports/rp2/build-RPI_PICO2_W-bond-fault \
+cmake -S ports/rp2 -B ports/rp2/build-RPI_PICO2_W-bond-fault-v2 \
     -DMICROPY_BOARD=RPI_PICO2_W \
     -DMICROPY_BOARD_DIR="$PWD/ports/rp2/boards/RPI_PICO2_W" \
     -DPICO_BUILD_DOCS=0 \
-    -DCMAKE_C_FLAGS="-DMICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST=1"
-cmake --build ports/rp2/build-RPI_PICO2_W-bond-fault -j 4
+    -DMICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST=ON
+cmake --build ports/rp2/build-RPI_PICO2_W-bond-fault-v2 -j 4
 ```
 
 The firmware output should be
-`ports/rp2/build-RPI_PICO2_W-bond-fault/firmware.uf2`.
+`ports/rp2/build-RPI_PICO2_W-bond-fault-v2/firmware.uf2`.
 Keep any existing user filesystem intact; do not format or clear bonds.
 
 Copy the script onto the Pico root (from the repository root), then
@@ -464,3 +464,11 @@ that remains a separate scenario if required.
 
 **Status: test implementation committed; compilation and hardware
 execution still pending.**
+
+**Build correction (2026-11-11):** The initial global
+`-DCMAKE_C_FLAGS=...` approach produced Pico SDK spin-lock errors
+because it interfered with the RP2350 target compiler configuration.
+The test option is now implemented as a target-local CMake definition
+and defaults to OFF. Use a **new** `-bond-fault-v2` build directory,
+so cached global compiler flags from the failed build cannot persist.
+Do not work around the error by disabling software spin locks.
