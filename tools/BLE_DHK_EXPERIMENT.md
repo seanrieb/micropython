@@ -1,4 +1,35 @@
-# BLE DHK regeneration hypothesis test (temporary)
+# RP2350 BLE bond restoration: DHK fix and verification record
+
+> **Integration status (2026-11-11):** The original experiment and test
+> procedures below are retained as a historical record. The production
+> hardening branch no longer contains the one-shot post-mutation fault
+> injection code or the fault-only CMake option. The archived
+> `ble_bond_postmutation_test.py` requires the historical test-build
+> commit (`4f4b065`) or an equivalent isolated fault-enabled build and
+> **will not pass against production firmware**. Do not enable the old
+> fault-test option on normal firmware.
+>
+> **Critical build requirement:** `lib/btstack` is a pinned submodule.
+> Merging this branch does not automatically apply
+> `tools/ble_dhk_rederive.patch`. A clean checkout must apply that
+> firmware patch to its matching pinned BTstack revision before building,
+> or the derived-key restoration fix will be missing from the UF2.
+> The separate `tools/ble_dhk_native_race.patch` is for host-only
+> CppUTest; do not include it in production firmware source.
+
+### Verified regression results
+
+- Existing macOS bond: repeated reconnects, encryption, and HID: **PASS**.
+- Six invalid snapshot imports rejected without modifying the live
+  snapshot: **PASS**.
+- BTstack native AES IRK/DHK mid-derivation race: **PASS**
+  (1 executed, 144 checks).
+- Fault-enabled Pico: post-mutation failure blocks advertising/export
+  until successful reimport: **PASS**.
+- Second Mac: new Just Works bond, snapshot persisted, and cold-start
+  bonded reconnect: **PASS**.
+- Original Mac: backed-up identity/bond restored and reconnected
+  without re-pairing: **PASS**.
 
 This experiment is isolated on `experiment/ble-raw-key-probe`.
 The unchanged test baseline is commit `ea25e444779214662e36f7cd85025958cef0f167`
