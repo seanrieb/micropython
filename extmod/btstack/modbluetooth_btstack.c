@@ -91,13 +91,6 @@ static bool bt_local_keys_valid;
 // A successful import or explicit bond clear is required for recovery.
 static bool bt_bond_restore_failed;
 
-#if defined(MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST)
-// TEST BUILDS ONLY: fail the first structurally valid import after it has
-// removed live peers and installed ER/IR. Never enable in release firmware.
-// The one-shot state is per Bluetooth activation and does not persist.
-static bool bt_bond_test_fail_next_import;
-#endif
-
 #if MICROPY_BLUETOOTH_DIAGNOSTICS
 // An SHA-256 digest truncated to eight bytes identifies key material
 // without disclosing it. Never print raw LTK, ER, or IR.
@@ -244,13 +237,6 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
     memcpy(bt_local_ir, data + 24, 16);
     sm_set_er(bt_local_er);
     sm_set_ir(bt_local_ir);
-    #if defined(MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST)
-    if (bt_bond_test_fail_next_import) {
-        bt_bond_test_fail_next_import = false;
-        BT_DIAG("BTstack SMP: TEST injected post-mutation bond import failure\n");
-        return false;
-    }
-    #endif
     // The patched BTstack recomputes IRK and DHK when a saved IR is
     // installed after HCI_STATE_WORKING. Do not allow encrypted reconnects
     // until that asynchronous derivation has finished.
@@ -1030,9 +1016,6 @@ int mp_bluetooth_init(void) {
     #if MICROPY_BLUETOOTH_BTSTACK && PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
     bt_local_keys_valid = false;
     bt_bond_restore_failed = false;
-    #if defined(MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST)
-    bt_bond_test_fail_next_import = true;
-    #endif
     #endif
 
     // BLE.bond_db() will replace these bootstrap values with stable,
