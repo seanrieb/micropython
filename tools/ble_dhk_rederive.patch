@@ -7,60 +7,47 @@ diff --git a/src/ble/sm.c b/src/ble/sm.c
  static sm_key_t sm_persistent_irk;
 -static derived_key_generation_t dkg_state;
 +static derived_key_generation_t dkg_state;
-+// Set when IR changes; finish any in-flight DKG AES request, then restart.
++// A changed IR invalidates in-flight key derivations until restarted.
 +static bool sm_dkg_restart_required;
  
  // derived from sm_persistent_er
  // ..
-@@ -2150,8 +2152,11 @@
+@@ -2150,8 +2152,10 @@
                  log_info("DKG_CALC_IRK started");
                  // IRK = d1(IR, 1, 0)
                  sm_d1_d_prime(1, 0, sm_aes128_plaintext);  // plaintext = d1 prime
 -                sm_aes128_state = SM_AES128_ACTIVE;
 -                btstack_crypto_aes128_encrypt(&sm_crypto_aes128_request, sm_persistent_ir, sm_aes128_plaintext, sm_persistent_irk, sm_handle_encryption_result_dkg_irk, NULL);
 +                sm_aes128_state = SM_AES128_ACTIVE;
-+                // This request uses the current IR. A later change sets the
-+                // restart flag, which the completion callback honors.
++                // A later IR update will set this again; its callback restarts.
 +                sm_dkg_restart_required = false;
 +                btstack_crypto_aes128_encrypt(&sm_crypto_aes128_request, sm_persistent_ir, sm_aes128_plaintext, sm_persistent_irk, sm_handle_encryption_result_dkg_irk, NULL);
                  return true;
              }
              break;
-@@ -3502,11 +3507,11 @@
+@@ -3501,8 +3505,8 @@
+     UNUSED(arg);
      sm_aes128_state = SM_AES128_IDLE;
  
-     log_info_key("irk", sm_persistent_irk);
+-    log_info_key("irk", sm_persistent_irk);
 -    dkg_state = DKG_CALC_DHK;
--    sm_trigger_run();
--}
--
--static void sm_handle_encryption_result_dkg_dhk
++    log_info_key("irk", sm_persistent_irk);
 +    dkg_state = sm_dkg_restart_required ? DKG_CALC_IRK : DKG_CALC_DHK;
-+    sm_trigger_run();
-+}
-+
-+static void sm_handle_encryption_result_dkg_dhk
+     sm_trigger_run();
+ }
+ 
+@@ -3510,8 +3514,8 @@
      UNUSED(arg);
      sm_aes128_state = SM_AES128_IDLE;
  
-@@ -3511,11 +3516,11 @@
-     sm_aes128_state = SM_AES128_IDLE;
- 
-     log_info_key("dhk", sm_persistent_dhk);
+-    log_info_key("dhk", sm_persistent_dhk);
 -    dkg_state = DKG_READY;
--    sm_trigger_run();
--}
--
--static void sm_handle_encryption_result_rau
++    log_info_key("dhk", sm_persistent_dhk);
 +    dkg_state = sm_dkg_restart_required ? DKG_CALC_IRK : DKG_READY;
-+    sm_trigger_run();
-+}
-+
-+static void sm_handle_encryption_result_rau
-     UNUSED(arg);
-     sm_aes128_state = SM_AES128_IDLE;
+     sm_trigger_run();
+ }
  
-@@ -4860,9 +4865,21 @@
+@@ -4860,9 +4864,20 @@
      (void)memcpy(sm_persistent_er, er, 16);
  }
  
@@ -70,8 +57,7 @@ diff --git a/src/ble/sm.c b/src/ble/sm.c
 +void sm_set_ir(sm_key_t ir){
 +    if (memcmp(sm_persistent_ir, ir, 16) == 0) return;
 +    (void)memcpy(sm_persistent_ir, ir, 16);
-+    // If a derivation is in flight, its callback must not advance to READY
-+    // using stale key material. The next IRK calculation clears this flag.
++    // Finish any outstanding AES request, then derive both keys from IR.
 +    if (sm_initialized && hci_get_state() == HCI_STATE_WORKING){
 +        sm_dkg_restart_required = true;
 +        dkg_state = DKG_CALC_IRK;
@@ -92,9 +78,10 @@ diff --git a/src/ble/sm.h b/src/ble/sm.h
   * @note If not set and btstack_tlv is configured, IR key is generated and stored in TLV by SM
   * @param ir key
   */
- void sm_set_ir(sm_key_t ir);
+-void sm_set_ir(sm_key_t ir);
++void sm_set_ir(sm_key_t ir);
 +
-+// True when IRK and DHK match the most recently installed IR.
++// True when both derived keys correspond to the latest IR.
 +bool sm_derived_keys_ready(void);
  
  /**
