@@ -38,10 +38,15 @@
 
 #define DEBUG_printf(...) // printf("btstack: " __VA_ARGS__)
 
-// Optional protocol diagnostics for development builds. Disabled by default.
-// Define MICROPY_BLUETOOTH_DIAGNOSTICS=1 in compiler flags to enable.
+// RP2350/CYW43 feature-branch diagnostics are on for reconnect investigation.
+// A normal build enables them; -DMICROPY_BLUETOOTH_DIAGNOSTICS=0 overrides.
+// Keep the default off for other BTstack targets.
 #ifndef MICROPY_BLUETOOTH_DIAGNOSTICS
+#if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43
+#define MICROPY_BLUETOOTH_DIAGNOSTICS (1)
+#else
 #define MICROPY_BLUETOOTH_DIAGNOSTICS (0)
+#endif
 #endif
 #if MICROPY_BLUETOOTH_DIAGNOSTICS
 #define BT_DIAG(...) mp_printf(&mp_plat_print, __VA_ARGS__)
@@ -386,6 +391,7 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     // Decode directly to avoid dependencies on generator-specific accessors.
     if (event_type == HCI_EVENT_LE_META && size >= 15 &&
         packet[2] == 0x05) {
+        #if MICROPY_BLUETOOTH_DIAGNOSTICS
         uint16_t ltk_handle = (uint16_t)packet[3] |
             ((uint16_t)packet[4] << 8);
         uint16_t ltk_ediv = (uint16_t)packet[13] |
@@ -397,6 +403,7 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
             (unsigned)packet[7], (unsigned)packet[8],
             (unsigned)packet[9], (unsigned)packet[10],
             (unsigned)packet[11], (unsigned)packet[12]);
+        #endif
     }
     if (event_type == SM_EVENT_PAIRING_COMPLETE) {
         BT_DIAG( "BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
