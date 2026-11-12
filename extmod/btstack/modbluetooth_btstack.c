@@ -284,6 +284,10 @@ bool mp_btstack_bond_clear(void) {
     if (!btstack_crypto_platform_random_generate(keys, sizeof(keys))) {
         return false;
     }
+    // Clearing is recovery too: block advertising and exports until keys
+    // and the empty peer database are ready.
+    bt_bond_restore_failed = true;
+    bt_local_keys_valid = false;
     for (int i = 0; i < le_device_db_max_count(); ++i) {
         le_device_db_remove(i);
     }
