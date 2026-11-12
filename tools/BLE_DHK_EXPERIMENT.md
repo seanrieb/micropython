@@ -322,3 +322,54 @@ failure injection, native mid-AES IR-change races, or fresh pairing.
 The temporary test invocation in the controller repository's
 `feature/ble-modes-7-9:controller_box/ble_mouse.py` should be removed
 after validation. No bond clear or firmware rebuild is needed.
+
+## Deterministic BTstack DKG race harness (new patch; not yet executed)
+
+A separate patch, `tools/ble_dhk_native_race.patch`, augments the pinned
+BTstack `test/security_manager` CppUTest mock with
+`DkgRekeyDuringAsyncAES`. It uses explicit mock HCI LE Encrypt completions
+to test IR changes in flight during IRK and DHK regeneration, checks that
+the encrypted command uses the newest IR, checks readiness stays false
+until both final requests finish, and tests duplicate-IR idempotency.
+
+The existing native fixture normally compiles software AES (and secure
+connections). The patch adds a separate `make dkg-race` configuration
+with mocked HCI controller AES, without changing the default `make`
+target or Pico firmware. It is **not** safe to run this race test against
+real saved bonds.
+
+From the MicroPython repository root, with
+`tools/ble_dhk_rederive.patch` already applied in the submodule:
+
+```sh
+git fetch origin
+git switch fix/rp2350-ble-dhk-hardening
+git pull --ff-only
+
+# In the pinned BTstack submodule; apply this additional TEST-only patch.
+git -C lib/btstack apply --check ../../tools/ble_dhk_native_race.patch
+git -C lib/btstack apply ../../tools/ble_dhk_native_race.patch
+git -C lib/btstack diff --check
+
+# Requires CppUTest installed, e.g. brew install cpputest on macOS.
+cd lib/btstack/test/security_manager
+make dkg-race
+```
+
+The patch is separate from the already verified firmware patch. Remove
+only the test patch with:
+
+```sh
+git -C lib/btstack apply -R ../../tools/ble_dhk_native_race.patch
+```
+
+Run that revert from the MicroPython repository root. Do **not** reverse
+the firmware `ble_dhk_rederive.patch` inadvertently.
+
+The new test patch was checked against source at pinned BTstack commit
+`18eab1b37d5319489a49150d17cf9a5b28d99c70` for exact hunk
+positions and old context. **The native test has not yet compiled or
+executed** here; a local GitHub clone and CppUTest were unavailable.
+A passing native result is still needed before integrating into the
+main feature branch. Post-mutation failure injection and fresh pairing
+remain independent validation gates.
