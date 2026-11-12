@@ -252,6 +252,18 @@ bool mp_btstack_bond_import(const uint8_t *data, size_t length) {
     memcpy(bt_local_ir, data + 24, 16);
     sm_set_er(bt_local_er);
     sm_set_ir(bt_local_ir);
+    // The patched BTstack recomputes IRK and DHK when a saved IR is
+    // installed after HCI_STATE_WORKING. Do not allow encrypted reconnects
+    // until that asynchronous derivation has finished.
+    mp_uint_t dkg_start = mp_hal_ticks_ms();
+    while (!sm_derived_keys_ready()) {
+        if ((mp_uint_t)(mp_hal_ticks_ms() - dkg_start) >= 2000) {
+            BT_DIAG("BTstack SMP: rederive timed out after 2000 ms\n");
+            return false;
+        }
+        mp_hal_delay_ms(1);
+    }
+    BT_DIAG("BTstack SMP: IRK/DHK regeneration complete\n");
     bt_local_keys_valid = true;
     #if MICROPY_BLUETOOTH_DIAGNOSTICS
     char fp[17];
