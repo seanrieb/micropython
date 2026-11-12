@@ -231,3 +231,54 @@ restores the existing bonded connection, and operates the BLE HID mouse.
 This validates the normal success path after the fail-closed changes. It does
 not establish that injected post-mutation failures are blocked, that the
 mid-AES race is exercised, or that a fresh pairing has been tested.
+
+## Non-destructive snapshot prevalidation test
+
+The script `tools/ble_bond_prevalidation_test.py` tests six validation
+failures without clearing or intentionally mutating any active bond. It uses
+a *copy* of the existing in-memory snapshot, deliberately corrupts only
+specific format bytes, expects a `ValueError`, and compares the full
+subsequent in-memory export to the original bytes. It neither reads nor
+writes persistent JSON files and does not log key material.
+
+Use after the current application has loaded mode-6 bonds, while there is
+no new pairing in progress. From the Mac repository root:
+
+```sh
+mpremote cp tools/ble_bond_prevalidation_test.py :
+```
+
+At the Pico REPL **after** `import main; main.start()` has restored the
+bond and established a stable connection (or after a clean disconnect):
+
+```python
+import bluetooth
+import ble_bond_prevalidation_test
+ble_bond_prevalidation_test.run(bluetooth.BLE())
+```
+
+Expected: six `PASS:` case messages and a final preserved-snapshot PASS.
+Do not use `BLE.bond_db(None)` or forget the macOS pairing.
+
+This checks validation-before-mutation only. It does not inject a failure
+after peer-record deletion or during DKG. Those cases require an isolated,
+disposable test fixture or native mocking; testing them on the real bonded
+device could lose the saved bond.
+
+### Native asynchronous test integration target
+
+The pinned BTstack repository has a CppUTest harness at
+`lib/btstack/test/security_manager/` with an HCI/AES mock
+(`mock.c`, `aes128_report_result()`) and a test runner
+(`security_manager.cpp`). The target scenarios are:
+- Start IRK derivation on IR=A; change to B while AES is outstanding.
+  Complete A's callback and verify a fresh IRK request for B is sent,
+  followed by a DHK request for B, with readiness false until completion.
+- Change IR during the DHK request; verify a full restart from IRK.
+- Change A -> B -> C before completion; verify final derived keys use C.
+- Reinstall the identical IR; verify no unnecessary regeneration.
+- Verify the final key output using a known AES d1 test vector, not merely
+  a READY boolean.
+
+The mock-based race tests are **specified, not yet implemented or run**.
+The existing Pico reconnect/HID success is not a substitute for this test.
