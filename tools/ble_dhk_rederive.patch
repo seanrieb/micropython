@@ -1,0 +1,34 @@
+diff --git a/src/ble/sm.c b/src/ble/sm.c
+--- a/src/ble/sm.c
++++ b/src/ble/sm.c
+@@ -4861,8 +4861,19 @@ void sm_set_er(sm_key_t er){
+ }
+ 
+ void sm_set_ir(sm_key_t ir){
+     (void)memcpy(sm_persistent_ir, ir, 16);
++    // Experiment: rederive IRK/DHK after application restores a saved IR.
++    // The HCI_STATE_WORKING handler originally derived these from the
++    // bootstrap IR, which may be all zeros. Do not retain that old DHK.
++    if (sm_initialized && hci_get_state() == HCI_STATE_WORKING){
++        dkg_state = DKG_CALC_IRK;
++        sm_trigger_run();
++    }
++}
++
++bool sm_derived_keys_ready(void){
++    return dkg_state == DKG_READY;
+ }
+ 
+ // Testing support only
+diff --git a/src/ble/sm.h b/src/ble/sm.h
+--- a/src/ble/sm.h
++++ b/src/ble/sm.h
+@@ -78,6 +78,9 @@ void sm_set_er(sm_key_t er);
+  */
+ void sm_set_ir(sm_key_t ir);
+ 
++// Experimental diagnostic: true when IRK and DHK derivation has completed.
++bool sm_derived_keys_ready(void);
++
+ /**
+  * @brief Registers OOB Data Callback. The callback should set all arguments and return 1 if oob_data is availble
