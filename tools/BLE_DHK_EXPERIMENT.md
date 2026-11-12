@@ -302,3 +302,23 @@ malformed inputs were submitted. The preceding service run showed successful
 bond restoration and encrypted reconnect, then `Controller service stopped`.
 Likely cause is inactive Bluetooth at the REPL. The script now reports a
 clear error for this condition. No six-case PASS result is claimed yet.
+
+## Snapshot prevalidation: hardware PASS (2026-11-11)
+
+On Pico 2 W running the hardening firmware, the in-service
+`ble_bond_prevalidation_test.run(self.ble)` invocation passed all six
+malformed-snapshot cases: magic, truncation, reserved byte, record count,
+key size, and authentication flag. The script confirmed that the complete
+93-byte in-memory snapshot remained unchanged across each rejected import.
+Its existing single-bond fingerprint stayed `5fa26f6348995d5a`.
+
+After the test, the Mac reconnected using the existing bond without
+re-pairing. BTstack reported re-encryption status `0x00`,
+`encrypted=1`, and `key_size=16`; the live snapshot still matched the
+saved fingerprint. This proves format prevalidation does not disturb the
+normal bonded reconnect path. It does **not** exercise post-mutation
+failure injection, native mid-AES IR-change races, or fresh pairing.
+
+The temporary test invocation in the controller repository's
+`feature/ble-modes-7-9:controller_box/ble_mouse.py` should be removed
+after validation. No bond clear or firmware rebuild is needed.
