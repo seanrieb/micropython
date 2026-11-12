@@ -31,4 +31,4 @@ diff --git a/src/ble/sm.h b/src/ble/sm.h
 +bool sm_derived_keys_ready(void);
 +
  /**
-  * @brief Registers OOB Data Callback. The callback should set all arguments and return 1 if oob_data is availble
+  * @brief Registers OOB Data Callback. The callback should set the oob_data and return 1 if oob_data is availble
