@@ -379,6 +379,25 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
     // Temporary RP2350/CYW43 pairing diagnostics. No keys or peer addresses
     // are logged. These distinguish stale macOS bonds from RNG/SMP failures.
     #if PICO_RP2350 && MICROPY_PY_BLUETOOTH_CYW43 && MICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING
+    // Observe the exact EDIV/RAND requested by the controller during
+    // re-encryption. These are public legacy pairing identifiers, not keys.
+    // HCI LE Long Term Key Request subevent (0x05):
+    // [event, length, subevent, handle LE16, RAND LE64, EDIV LE16].
+    // Decode directly to avoid dependencies on generator-specific accessors.
+    if (event_type == HCI_EVENT_LE_META && size >= 15 &&
+        packet[2] == 0x05) {
+        uint16_t ltk_handle = (uint16_t)packet[3] |
+            ((uint16_t)packet[4] << 8);
+        uint16_t ltk_ediv = (uint16_t)packet[13] |
+            ((uint16_t)packet[14] << 8);
+        // Printed in HCI/native byte order to compare with the Mac trace.
+        BT_DIAG("BTstack SMP: LTK request handle=%u ediv=0x%04x rand_hci=%02x%02x%02x%02x%02x%02x%02x%02x\\n",
+            (unsigned)ltk_handle, (unsigned)ltk_ediv,
+            (unsigned)packet[5], (unsigned)packet[6],
+            (unsigned)packet[7], (unsigned)packet[8],
+            (unsigned)packet[9], (unsigned)packet[10],
+            (unsigned)packet[11], (unsigned)packet[12]);
+    }
     if (event_type == SM_EVENT_PAIRING_COMPLETE) {
         BT_DIAG( "BTstack SMP: pairing complete handle=%u status=0x%02x reason=0x%02x\n",
             (unsigned)sm_event_pairing_complete_get_handle(packet),
@@ -504,7 +523,20 @@ static void btstack_packet_handler_generic(uint8_t packet_type, uint16_t channel
         }
 
         hci_connection_t *hci_con = hci_connection_for_handle(conn_handle);
+        // A peer database entry being present does not imply that the
+        // controller accepted the key or established encryption.
+        if (hci_con == NULL) {
+            BT_DIAG("BTstack SMP: status handle=%u missing_hci_connection\\n",
+                (unsigned)conn_handle);
+            return;
+        }
         sm_connection_t *desc = &hci_con->sm_connection;
+        BT_DIAG("BTstack SMP: status handle=%u event=0x%02x db_index=%d encrypted=%u authenticated=%u key_size=%u\\n",
+            (unsigned)conn_handle, (unsigned)event_type,
+            (int)desc->sm_le_db_index,
+            (unsigned)desc->sm_connection_encrypted,
+            (unsigned)desc->sm_connection_authenticated,
+            (unsigned)desc->sm_actual_encryption_key_size);
         mp_bluetooth_gatts_on_encryption_update(conn_handle,
             desc->sm_connection_encrypted,
             desc->sm_connection_authenticated,
