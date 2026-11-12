@@ -398,3 +398,69 @@ actual radio race. No Pico firmware or pairing state was altered by
 this host-only test. The outstanding gates are post-mutation bond-import
 failure injection and fresh-pairing validation before merging into
 `feature/rp2350-ble-security`.
+
+## Post-mutation fail-closed test: prepared, not yet executed (2026-11-11)
+
+A one-shot fault-injection hook was added to
+`extmod/btstack/modbluetooth_btstack.c`, **disabled in all normal
+builds**. It is compiled only with
+`MICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST`. On the first structurally
+valid bond import after BLE activation, it returns failure just after
+clearing the live LE database and setting the restored ER/IR, leaving
+the existing fail-closed state asserted. Subsequent imports run
+normally. It does not write to filesystem or modify saved JSON.
+
+The standalone test `tools/ble_bond_postmutation_test.py` creates
+a snapshot of the live BLE session before injection (no real
+paired peer required), then tests:
+1. The first valid import fails with `ValueError` after mutation.
+2. Bond export fails with `OSError` while restore is incomplete.
+3. Advertising fails with `OSError` while restore is incomplete.
+4. A second import of the identical snapshot succeeds and exports
+   exactly the same bytes.
+5. Advertising is available again after recovery.
+
+**Use only a separate test build and run with the controller service
+stopped**, preferably booting in mode 0. The fault build is intentionally
+incompatible with normal first-attempt saved-bond restoration: the
+controller will initially reject it. Keep a known-good UF2 and restore
+that firmware after testing. Never turn this define on in a production
+firmware build.
+
+Example out-of-tree build from the MicroPython repository root,
+using the existing patched BTstack submodule:
+
+```sh
+cmake -S ports/rp2 -B ports/rp2/build-RPI_PICO2_W-bond-fault \
+    -DMICROPY_BOARD=RPI_PICO2_W \
+    -DMICROPY_BOARD_DIR="$PWD/ports/rp2/boards/RPI_PICO2_W" \
+    -DPICO_BUILD_DOCS=0 \
+    -DCMAKE_C_FLAGS="-DMICROPY_BTSTACK_BOND_IMPORT_FAULT_TEST=1"
+cmake --build ports/rp2/build-RPI_PICO2_W-bond-fault -j 4
+```
+
+The firmware output should be
+`ports/rp2/build-RPI_PICO2_W-bond-fault/firmware.uf2`.
+Keep any existing user filesystem intact; do not format or clear bonds.
+
+Copy the script onto the Pico root (from the repository root), then
+with the controller stopped and BLE inactive:
+
+```sh
+mpremote cp tools/ble_bond_postmutation_test.py :ble_bond_postmutation_test.py
+```
+
+At the REPL:
+
+```python
+import ble_bond_postmutation_test
+ble_bond_postmutation_test.run()
+```
+
+The script deactivates BLE on exit. A passed test means fail-closed
+behavior and successful recovery were verified on the fault-injection
+firmware. It does not prove the 2000 ms timeout path specifically;
+that remains a separate scenario if required.
+
+**Status: test implementation committed; compilation and hardware
+execution still pending.**
