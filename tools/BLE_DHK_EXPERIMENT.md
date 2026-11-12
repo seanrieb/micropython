@@ -373,3 +373,28 @@ executed** here; a local GitHub clone and CppUTest were unavailable.
 A passing native result is still needed before integrating into the
 main feature branch. Post-mutation failure injection and fresh pairing
 remain independent validation gates.
+
+## Native mid-AES DKG race regression: PASS (2026-11-11)
+
+On an Apple Silicon Mac with CppUTest installed, the dedicated
+`make dkg-race` target built and executed successfully after the
+test-only mock packet-buffer-length accessor was added in
+`tools/ble_dhk_native_race.patch` (commit `410730c`).
+
+Reported result:
+
+```text
+build-dkg/security_manager -n DkgRekeyDuringAsyncAES
+OK (2 tests, 1 ran, 144 checks, 0 ignored, 1 filtered out, 0 ms)
+```
+
+The test exercises IR changes during mocked asynchronous IRK and DHK
+derivation, verifies that the newest IR is used for restarted AES
+commands, checks that readiness remains false until derivation finishes,
+and verifies reapplying the same IR does not restart derivation.
+
+This validates the native race handling **under the test mock**, not an
+actual radio race. No Pico firmware or pairing state was altered by
+this host-only test. The outstanding gates are post-mutation bond-import
+failure injection and fresh-pairing validation before merging into
+`feature/rp2350-ble-security`.
