@@ -6,7 +6,6 @@
     "features": [
         "Dual-core",
         "External Flash",
-        "External RAM",
         "JST-SH",
         "RGB LED",
         "USB-C"
